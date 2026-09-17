@@ -6,6 +6,9 @@ final class ADASViewModel: ObservableObject {
     @Published var detections: [ADASDetection] = []
     @Published var risk: ForwardRisk = .init(level: .clear, object: nil)
     @Published var inferenceActive = false
+    @Published var inferenceMilliseconds: Double = 0
+    @Published var frameAgeMilliseconds: Double = 0
+    @Published var replacedFrames: UInt64 = 0
 
     let rearCamera = RearCameraSource()
     private let engine = UltralyticsDetectionEngine()
@@ -18,7 +21,7 @@ final class ADASViewModel: ObservableObject {
             Task { await self.pipeline.submit(frame) }
         }
         Task {
-            await pipeline.setResultHandler { [weak self] result in
+            await pipeline.setResultHandler { [weak self] result, metrics in
                 let relevant = RoadObjectFilter.relevant(result.detections)
                 Task { @MainActor [weak self] in
                     guard let self else { return }
@@ -26,6 +29,9 @@ final class ADASViewModel: ObservableObject {
                     let rawRisk = ForwardRiskEvaluator.evaluate(relevant)
                     let stableLevel = self.warningDebouncer.update(with: rawRisk)
                     self.risk = ForwardRisk(level: stableLevel, object: rawRisk.object)
+                    self.inferenceMilliseconds = metrics.inferenceMilliseconds
+                    self.frameAgeMilliseconds = metrics.frameAgeMilliseconds
+                    self.replacedFrames = metrics.replacedFrames
                     self.inferenceActive = true
                 }
             }
@@ -39,5 +45,8 @@ final class ADASViewModel: ObservableObject {
         warningDebouncer.reset()
         risk = .init(level: .clear, object: nil)
         inferenceActive = false
+        inferenceMilliseconds = 0
+        frameAgeMilliseconds = 0
+        replacedFrames = 0
     }
 }
