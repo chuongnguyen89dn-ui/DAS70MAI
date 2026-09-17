@@ -34,12 +34,14 @@ struct ContentView: View {
                             Text(a500sStatus).font(.caption).foregroundStyle(.secondary)
                         }
                     }
+                    LaneGuideOverlay()
+                        .clipShape(RoundedRectangle(cornerRadius: 18))
                     DetectionOverlay(detections: adas.detections)
                         .clipShape(RoundedRectangle(cornerRadius: 18))
                 }.frame(maxHeight: .infinity).clipped()
 
                 HStack {
-                    Text(adas.inferenceActive ? "YOLO active" : "YOLO loading")
+                    Text(adas.inferenceActive ? "YOLO active · \(adas.detections.count) objects" : "YOLO loading")
                     Spacer()
                     Text(String(format: "%.0f ms · age %.0f ms · drop %llu", adas.inferenceMilliseconds, adas.frameAgeMilliseconds, adas.replacedFrames))
                 }.font(.caption).foregroundStyle(.secondary)
