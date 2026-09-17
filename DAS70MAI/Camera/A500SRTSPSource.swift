@@ -1,48 +1,165 @@
 import Foundation
 import CoreVideo
+import UIKit
+import VLCKit
 
-/// A500S source using the full xADAS native RTSP/RTP transport and DAS VideoToolbox output.
-final class A500SRTSPSource: @unchecked Sendable {
+/// Mirrors xADAS A500S behavior: native RTSP first, then the proven VLC path after 6s without a frame.
+final class A500SRTSPSource: NSObject, @unchecked Sendable, VLCMediaPlayerDelegate {
     enum State: Sendable, Equatable { case idle, connecting, streaming, failed(String) }
     var onStateChanged: (@Sendable (State) -> Void)?
     var onPixelBuffer: (@Sendable (CVPixelBuffer) -> Void)?
 
     private let native = A500SNativeRTSPClient()
     private let decoder = H264VideoToolboxDecoder()
+    private let player = VLCMediaPlayer()
+    private let streamURL = "rtsp://192.168.0.1/00000000"
+    private let frameQueue = DispatchQueue(label: "xadas.70mai.frame", qos: .userInitiated)
+    private var fallbackWorkItem: DispatchWorkItem?
+    private var reconnectWorkItem: DispatchWorkItem?
+    private var snapshotTimer: Timer?
+    private var watchdogTimer: Timer?
+    private var drawable: UIView?
+    private var snapshotInFlight = false
+    private var frameProcessing = false
+    private var snapshotPath: String?
+    private var snapshotCounter: UInt64 = 0
+    private var lastFrameAt = ProcessInfo.processInfo.systemUptime
+    private var consecutiveFailures = 0
     private var stopped = true
     private var gotFrame = false
+    private var usingVLCFallback = false
 
-    init() {
+    override init() {
+        super.init()
+        player.delegate = self
+        NotificationCenter.default.addObserver(self, selector: #selector(snapshotTaken(_:)), name: VLCMediaPlayer.snapshotTakenNotification, object: player)
         native.onStatus = { [weak self] status in
-            guard let self else { return }
+            guard let self, !self.stopped, !self.usingVLCFallback else { return }
             if status.contains("ERROR") || status.contains("FAILED") || status.contains("STALLED") || status.contains("NO RTP") || status.contains("INVALID") {
                 self.onStateChanged?(.failed(status))
-            } else {
-                self.onStateChanged?(.connecting)
-            }
+            } else { self.onStateChanged?(.connecting) }
         }
         native.onAccessUnit = { [weak self] nals in self?.decoder.decode(nalus: nals) }
         decoder.onPixelBuffer = { [weak self] pixelBuffer in
-            guard let self, !self.stopped else { return }
+            guard let self, !self.stopped, !self.usingVLCFallback else { return }
             self.native.noteDecodedFrame()
-            if !self.gotFrame { self.gotFrame = true; self.onStateChanged?(.streaming) }
+            self.gotFrame = true
+            self.fallbackWorkItem?.cancel(); self.fallbackWorkItem = nil
+            self.onStateChanged?(.streaming)
             self.onPixelBuffer?(pixelBuffer)
         }
     }
 
+    deinit { NotificationCenter.default.removeObserver(self) }
+
     func start() {
         stop()
-        stopped = false
-        gotFrame = false
+        stopped = false; gotFrame = false; usingVLCFallback = false; consecutiveFailures = 0
         onStateChanged?(.connecting)
         native.start()
+        // Exact xADAS DriveView policy: if native has no decoded frame after 6 seconds, use VLC fallback.
+        let item = DispatchWorkItem { [weak self] in
+            guard let self, !self.stopped, !self.gotFrame, !self.usingVLCFallback else { return }
+            self.usingVLCFallback = true
+            self.native.stop(); self.decoder.reset()
+            self.onStateChanged?(.connecting)
+            DispatchQueue.main.async { [weak self] in self?.startVLC() }
+        }
+        fallbackWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6.0, execute: item)
     }
 
     func stop() {
-        stopped = true
-        gotFrame = false
-        native.stop()
-        decoder.reset()
+        stopped = true; gotFrame = false; usingVLCFallback = false
+        fallbackWorkItem?.cancel(); fallbackWorkItem = nil
+        reconnectWorkItem?.cancel(); reconnectWorkItem = nil
+        native.stop(); decoder.reset(); stopSnapshotLoop(); player.stop()
+        DispatchQueue.main.async { [weak self] in self?.player.drawable = nil }
         onStateChanged?(.idle)
+    }
+
+    @MainActor private func startVLC() {
+        guard !stopped, usingVLCFallback else { return }
+        reconnectWorkItem?.cancel(); reconnectWorkItem = nil
+        stopSnapshotLoop(); player.stop(); onStateChanged?(.connecting)
+        guard let url = URL(string: streamURL), let media = VLCMedia(url: url) else { onStateChanged?(.failed("70MAI URL INVALID")); return }
+        // Exact options from xADAS SeventyMaiPlayerView.
+        media.addOption(":network-caching=180")
+        media.addOption(":live-caching=180")
+        media.addOption(":clock-jitter=0")
+        media.addOption(":clock-synchro=0")
+        media.addOption(":drop-late-frames")
+        media.addOption(":skip-frames")
+        player.media = media
+        if drawable == nil {
+            let view = UIView(frame: CGRect(x: 0, y: 0, width: 960, height: 540)); view.backgroundColor = .black; view.clipsToBounds = true; view.contentMode = .scaleAspectFill; drawable = view
+        }
+        player.drawable = drawable
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in guard let self, !self.stopped, self.usingVLCFallback else { return }; self.player.drawable = self.drawable; self.player.play() }
+    }
+
+    func mediaPlayerStateChanged(_ newState: VLCMediaPlayerState) {
+        guard usingVLCFallback else { return }
+        switch newState {
+        case .opening: onStateChanged?(.connecting)
+        case .playing: consecutiveFailures = 0; lastFrameAt = ProcessInfo.processInfo.systemUptime; startSnapshotLoop()
+        case .error: stopSnapshotLoop(); scheduleVLCReconnect(reason: "70MAI ERROR • AUTO RETRY")
+        case .stopped: stopSnapshotLoop(); if !stopped { scheduleVLCReconnect(reason: "70MAI RECONNECTING") }
+        default: break
+        }
+    }
+
+    private func scheduleVLCReconnect(reason: String) {
+        guard reconnectWorkItem == nil, !stopped, usingVLCFallback else { return }
+        consecutiveFailures += 1
+        let delay = min(5.0, 0.8 + Double(consecutiveFailures - 1) * 0.8)
+        onStateChanged?(.failed(reason))
+        let item = DispatchWorkItem { [weak self] in guard let self, !self.stopped, self.usingVLCFallback else { return }; self.reconnectWorkItem = nil; DispatchQueue.main.async { [weak self] in self?.startVLC() } }
+        reconnectWorkItem = item; DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
+    }
+
+    private func startSnapshotLoop() {
+        guard snapshotTimer == nil else { return }
+        lastFrameAt = ProcessInfo.processInfo.systemUptime
+        snapshotTimer = Timer.scheduledTimer(withTimeInterval: 0.18, repeats: true) { [weak self] _ in self?.requestSnapshot() }
+        watchdogTimer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: true) { [weak self] _ in
+            guard let self, self.player.state == .playing, !self.frameProcessing, ProcessInfo.processInfo.systemUptime - self.lastFrameAt > 2.4 else { return }
+            self.scheduleVLCReconnect(reason: "70MAI VIDEO STALLED")
+        }
+        requestSnapshot()
+    }
+
+    private func stopSnapshotLoop() {
+        snapshotTimer?.invalidate(); snapshotTimer = nil; watchdogTimer?.invalidate(); watchdogTimer = nil
+        snapshotInFlight = false; frameProcessing = false
+        if let snapshotPath { try? FileManager.default.removeItem(atPath: snapshotPath) }; snapshotPath = nil
+    }
+
+    private func requestSnapshot() {
+        guard player.state == .playing, !snapshotInFlight, !frameProcessing else { return }
+        snapshotCounter &+= 1
+        let path = FileManager.default.temporaryDirectory.appendingPathComponent("xadas-70mai-\(snapshotCounter % 2).png").path
+        try? FileManager.default.removeItem(atPath: path); snapshotPath = path; snapshotInFlight = true
+        player.saveVideoSnapshot(at: path, withWidth: 960, andHeight: 540)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in guard let self, self.snapshotInFlight else { return }; self.snapshotInFlight = false }
+    }
+
+    @objc private func snapshotTaken(_ notification: Notification) {
+        guard usingVLCFallback, let path = snapshotPath else { snapshotInFlight = false; return }
+        snapshotInFlight = false; snapshotPath = nil; frameProcessing = true; lastFrameAt = ProcessInfo.processInfo.systemUptime
+        gotFrame = true; onStateChanged?(.streaming)
+        frameQueue.async { [weak self] in
+            guard let self, let image = UIImage(contentsOfFile: path), let cg = image.cgImage, let pb = Self.makePixelBuffer(from: cg) else { try? FileManager.default.removeItem(atPath: path); DispatchQueue.main.async { [weak self] in self?.frameProcessing = false }; return }
+            try? FileManager.default.removeItem(atPath: path); self.onPixelBuffer?(pb); DispatchQueue.main.async { [weak self] in self?.frameProcessing = false }
+        }
+    }
+
+    private static func makePixelBuffer(from image: CGImage) -> CVPixelBuffer? {
+        let attrs: [CFString: Any] = [kCVPixelBufferCGImageCompatibilityKey: true, kCVPixelBufferCGBitmapContextCompatibilityKey: true, kCVPixelBufferIOSurfacePropertiesKey: [:]]
+        var buffer: CVPixelBuffer?
+        guard CVPixelBufferCreate(kCFAllocatorDefault, image.width, image.height, kCVPixelFormatType_32BGRA, attrs as CFDictionary, &buffer) == kCVReturnSuccess, let buffer else { return nil }
+        CVPixelBufferLockBaseAddress(buffer, []); defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
+        guard let base = CVPixelBufferGetBaseAddress(buffer), let cs = CGColorSpace(name: CGColorSpace.sRGB), let ctx = CGContext(data: base, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: CVPixelBufferGetBytesPerRow(buffer), space: cs, bitmapInfo: CGBitmapInfo.byteOrder32Little.rawValue | CGImageAlphaInfo.premultipliedFirst.rawValue) else { return nil }
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height)); return buffer
     }
 }
