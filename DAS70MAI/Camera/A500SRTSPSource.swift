@@ -21,6 +21,13 @@ final class A500SRTSPSource: @unchecked Sendable {
     func start() {
         stop()
         onStateChanged?(.connecting)
+        A500SPreviewSession.shared.prepare(host: profile.host) { [weak self] in
+            guard let self else { return }
+            self.startRTSP()
+        }
+    }
+
+    private func startRTSP() {
         task = Task { [weak self] in
             guard let self else { return }
             let session = RTSPClientSession(
@@ -58,6 +65,7 @@ final class A500SRTSPSource: @unchecked Sendable {
         if let oldSession {
             Task { await oldSession.stop() }
         }
+        A500SPreviewSession.shared.reset()
         onStateChanged?(.idle)
     }
 
