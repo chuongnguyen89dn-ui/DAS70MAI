@@ -44,6 +44,7 @@ final class A500SRTSPSource: NSObject, @unchecked Sendable, VLCMediaPlayerDelega
         }
     }
 
+    @MainActor
     private func startPlayer() {
         reconnectWorkItem?.cancel(); reconnectWorkItem = nil
         stopSnapshotLoop(); onStateChanged?(.connecting); player.stop()
@@ -56,7 +57,9 @@ final class A500SRTSPSource: NSObject, @unchecked Sendable, VLCMediaPlayerDelega
         media.addOption(":skip-frames")
         player.media = media
         if vlcDrawable == nil {
-            let view = UIView(frame: CGRect(x: 0, y: 0, width: 960, height: 540)); view.backgroundColor = .black; vlcDrawable = view
+            let view = UIView(frame: CGRect(x: 0, y: 0, width: 960, height: 540))
+            view.backgroundColor = .black
+            vlcDrawable = view
         }
         player.drawable = vlcDrawable
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
@@ -69,7 +72,9 @@ final class A500SRTSPSource: NSObject, @unchecked Sendable, VLCMediaPlayerDelega
     func stop() {
         stoppedByOwner = true
         reconnectWorkItem?.cancel(); reconnectWorkItem = nil
-        stopSnapshotLoop(); player.stop(); player.drawable = nil; onStateChanged?(.idle)
+        stopSnapshotLoop(); player.stop()
+        DispatchQueue.main.async { [weak self] in self?.player.drawable = nil }
+        onStateChanged?(.idle)
     }
 
     func mediaPlayerStateChanged(_ newState: VLCMediaPlayerState) {
@@ -88,7 +93,11 @@ final class A500SRTSPSource: NSObject, @unchecked Sendable, VLCMediaPlayerDelega
         consecutiveFailures += 1
         let delay = min(5.0, 0.8 + Double(consecutiveFailures - 1) * 0.8)
         onStateChanged?(.failed("\(reason); retry \(String(format: "%.1f", delay))s"))
-        let item = DispatchWorkItem { [weak self] in guard let self, !self.stoppedByOwner else { return }; self.reconnectWorkItem = nil; self.startPlayer() }
+        let item = DispatchWorkItem { [weak self] in
+            guard let self, !self.stoppedByOwner else { return }
+            self.reconnectWorkItem = nil
+            DispatchQueue.main.async { [weak self] in self?.startPlayer() }
+        }
         reconnectWorkItem = item; DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
     }
 
