@@ -31,14 +31,12 @@ actor ADASPipeline {
     private let engine: ADASInferenceEngine
     private var workerRunning = false
     private var onResult: (@Sendable (ADASFrameResult, ADASRuntimeMetrics) -> Void)?
+    private var onError: (@Sendable (String) -> Void)?
 
-    init(engine: ADASInferenceEngine) {
-        self.engine = engine
-    }
+    init(engine: ADASInferenceEngine) { self.engine = engine }
 
-    func setResultHandler(_ handler: @escaping @Sendable (ADASFrameResult, ADASRuntimeMetrics) -> Void) {
-        onResult = handler
-    }
+    func setResultHandler(_ handler: @escaping @Sendable (ADASFrameResult, ADASRuntimeMetrics) -> Void) { onResult = handler }
+    func setErrorHandler(_ handler: @escaping @Sendable (String) -> Void) { onError = handler }
 
     func submit(_ frame: VideoFrame) async {
         await frames.push(frame)
@@ -54,16 +52,14 @@ actor ADASPipeline {
                 let inferenceStart = clock.now
                 let result = try await engine.infer(pixelBuffer: frame.pixelBuffer, source: frame.source)
                 let processedAt = clock.now
-                let inferenceDuration = inferenceStart.duration(to: processedAt)
-                let frameAge = frame.receivedAt.duration(to: processedAt)
                 let metrics = ADASRuntimeMetrics(
-                    inferenceMilliseconds: Self.milliseconds(inferenceDuration),
-                    frameAgeMilliseconds: Self.milliseconds(frameAge),
+                    inferenceMilliseconds: Self.milliseconds(inferenceStart.duration(to: processedAt)),
+                    frameAgeMilliseconds: Self.milliseconds(frame.receivedAt.duration(to: processedAt)),
                     replacedFrames: await frames.replacedFrames
                 )
                 onResult?(result, metrics)
             } catch {
-                // Inference errors are isolated from camera capture; next frame may still succeed.
+                onError?(error.localizedDescription)
             }
         }
         workerRunning = false
