@@ -9,6 +9,10 @@ settings:
     SWIFT_VERSION: "6.0"
     TARGETED_DEVICE_FAMILY: "1"
     SUPPORTS_MACCATALYST: "NO"
+packages:
+  UltralyticsYOLO:
+    url: https://github.com/ultralytics/yolo-ios-app.git
+    from: 8.9.4
 targets:
   DAS70MAI:
     type: application
@@ -16,6 +20,9 @@ targets:
     deploymentTarget: "16.0"
     sources:
       - path: DAS70MAI
+    dependencies:
+      - package: UltralyticsYOLO
+        product: UltralyticsYOLO
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.das70mai.app
