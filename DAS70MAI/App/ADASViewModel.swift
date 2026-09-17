@@ -20,7 +20,6 @@ final class ADASViewModel: ObservableObject {
     private let engine = UltralyticsDetectionEngine()
     private lazy var pipeline = ADASPipeline(engine: engine)
     private var warningDebouncer = WarningDebouncer()
-    private let ciContext = CIContext(options: [.cacheIntermediates: false])
 
     init() {
         rearCamera.onFrame = { [weak self] frame in
@@ -37,7 +36,17 @@ final class ADASViewModel: ObservableObject {
             guard let self else { return }
             let frame = VideoFrame(pixelBuffer: pixelBuffer, source: .a500s, receivedAt: .now)
             Task { await self.pipeline.submit(frame) }
-            Task { @MainActor [weak self] in self?.updateA500SPreview(pixelBuffer) }
+
+            // Render the preview into an immutable CGImage before crossing to MainActor.
+            // CVPixelBuffer is mutable/non-Sendable and Swift 6 correctly rejects sending it
+            // from the VideoToolbox decoder callback into the UI actor.
+            let image = CIImage(cvPixelBuffer: pixelBuffer)
+            let context = CIContext(options: [.cacheIntermediates: false])
+            if let preview = context.createCGImage(image, from: image.extent) {
+                Task { @MainActor [weak self] in
+                    self?.a500sFrame = preview
+                }
+            }
         }
         Task {
             await pipeline.setResultHandler { [weak self] result, metrics in
@@ -78,11 +87,6 @@ final class ADASViewModel: ObservableObject {
         a500sDecoder.reset()
         a500sFrame = nil
         resetRuntime()
-    }
-
-    private func updateA500SPreview(_ pixelBuffer: CVPixelBuffer) {
-        let image = CIImage(cvPixelBuffer: pixelBuffer)
-        a500sFrame = ciContext.createCGImage(image, from: image.extent)
     }
 
     private func resetRuntime() {
