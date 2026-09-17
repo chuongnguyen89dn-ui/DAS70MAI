@@ -56,7 +56,7 @@ struct A500SVLCView: UIViewRepresentable {
             guard attachedView !== view else { return }
             attachedView = view
             player.drawable = view
-            let media = VLCMedia(url: url)
+            guard let media = VLCMedia(url: url) else { return }
             media.addOption(":network-caching=180")
             media.addOption(":live-caching=180")
             media.addOption(":clock-jitter=0")
