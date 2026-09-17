@@ -1,3 +1,5 @@
+import CoreImage
+import CoreVideo
 import Foundation
 import SwiftUI
 
@@ -9,16 +11,33 @@ final class ADASViewModel: ObservableObject {
     @Published var inferenceMilliseconds: Double = 0
     @Published var frameAgeMilliseconds: Double = 0
     @Published var replacedFrames: UInt64 = 0
+    @Published var a500sState: A500SRTSPSource.State = .idle
+    @Published var a500sFrame: CGImage?
 
     let rearCamera = RearCameraSource()
+    private let a500s = A500SRTSPSource()
+    private let a500sDecoder = H264VideoToolboxDecoder()
     private let engine = UltralyticsDetectionEngine()
     private lazy var pipeline = ADASPipeline(engine: engine)
     private var warningDebouncer = WarningDebouncer()
+    private let ciContext = CIContext(options: [.cacheIntermediates: false])
 
     init() {
         rearCamera.onFrame = { [weak self] frame in
             guard let self else { return }
             Task { await self.pipeline.submit(frame) }
+        }
+        a500s.onStateChanged = { [weak self] state in
+            Task { @MainActor [weak self] in self?.a500sState = state }
+        }
+        a500s.onH264AccessUnit = { [weak self] nalus, _, _ in
+            self?.a500sDecoder.decode(nalus: nalus)
+        }
+        a500sDecoder.onPixelBuffer = { [weak self] pixelBuffer in
+            guard let self else { return }
+            let frame = VideoFrame(pixelBuffer: pixelBuffer, source: .a500s, receivedAt: .now)
+            Task { await self.pipeline.submit(frame) }
+            Task { @MainActor [weak self] in self?.updateA500SPreview(pixelBuffer) }
         }
         Task {
             await pipeline.setResultHandler { [weak self] result, metrics in
@@ -38,9 +57,35 @@ final class ADASViewModel: ObservableObject {
         }
     }
 
-    func startRearCamera() { rearCamera.start() }
+    func startRearCamera() {
+        stopA500S()
+        rearCamera.start()
+    }
+
+    func startA500S() {
+        rearCamera.stop()
+        resetRuntime()
+        a500s.start()
+    }
+
     func stopRearCamera() {
         rearCamera.stop()
+        resetRuntime()
+    }
+
+    func stopA500S() {
+        a500s.stop()
+        a500sDecoder.reset()
+        a500sFrame = nil
+        resetRuntime()
+    }
+
+    private func updateA500SPreview(_ pixelBuffer: CVPixelBuffer) {
+        let image = CIImage(cvPixelBuffer: pixelBuffer)
+        a500sFrame = ciContext.createCGImage(image, from: image.extent)
+    }
+
+    private func resetRuntime() {
         detections = []
         warningDebouncer.reset()
         risk = .init(level: .clear, object: nil)
