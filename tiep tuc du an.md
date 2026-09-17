@@ -78,3 +78,14 @@ Trang thai: BUILD-VERIFIED, RUNTIME NOT VERIFIED
 - Upstream package/release license: AGPL-3.0; neu phat hanh thuong mai can xu ly licensing phu hop, khong coi la permissive dependency.
 - CHUA VERIFIED runtime: model tai/cache thanh cong tren iPhone, detections thuc, overlay alignment, FPS/frame-age/thermal.
 - Uu tien tiep: runtime observability + warning debounce; sau do A500S RTSP adapter vao cung pipeline, khong auto switch source.
+
+## 2026-09-17 — Build #36 xanh + warning feedback
+
+Trang thai: BUILD-VERIFIED TO #36; NEW FEEDBACK IMPLEMENTED, NOT YET VERIFIED
+
+- VERIFIED: GitHub Actions iOS Build run #36 success tren commit `a3fc891` (`fix: avoid sending A500S pixel buffer to MainActor`).
+- A500S decoded frame van vao chung `VideoFrame/CVPixelBuffer -> ADASPipeline`; preview UI chi nhan CGImage immutable de tranh Swift 6 Sendable/MainActor violation.
+- Da them `WarningFeedbackController`: caution rung medium; warning dung warning haptic + system sound, chi kich hoat sau `WarningDebouncer`, co cooldown 1.5s de tranh spam.
+- Reset feedback khi dung/chuyen source; khong thay doi manual source policy va khong auto fallback.
+- CI moi da duoc trigger sau thay doi feedback; chua danh dau BUILD-VERIFIED cho thay doi nay cho den khi run xanh.
+- Blocker vat ly van con: iPhone 14 Pro runtime (rear preview/model/detection/overlay/thermal) va A500S that (RTSP compatibility + end-to-end latency).
