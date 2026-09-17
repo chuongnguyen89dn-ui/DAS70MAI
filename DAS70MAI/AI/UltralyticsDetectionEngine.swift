@@ -3,8 +3,7 @@ import CoreVideo
 import Foundation
 import UltralyticsYOLO
 
-final class UltralyticsDetectionEngine: @unchecked Sendable, ADASInferenceEngine {
-    private let lock = NSLock()
+actor UltralyticsDetectionEngine: ADASInferenceEngine {
     private var model: YOLO?
     private var loadingTask: Task<YOLO, Error>?
 
@@ -27,13 +26,10 @@ final class UltralyticsDetectionEngine: @unchecked Sendable, ADASInferenceEngine
     }
 
     private func loadedModel() async throws -> YOLO {
-        lock.lock()
         if let model, model.isLoaded {
-            lock.unlock()
             return model
         }
         if let loadingTask {
-            lock.unlock()
             return try await loadingTask.value
         }
 
@@ -52,19 +48,14 @@ final class UltralyticsDetectionEngine: @unchecked Sendable, ADASInferenceEngine
             }
         }
         loadingTask = task
-        lock.unlock()
 
         do {
             let loaded = try await task.value
-            lock.lock()
             model = loaded
             loadingTask = nil
-            lock.unlock()
             return loaded
         } catch {
-            lock.lock()
             loadingTask = nil
-            lock.unlock()
             throw error
         }
     }
