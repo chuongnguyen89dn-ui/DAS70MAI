@@ -3,9 +3,8 @@ import CoreVideo
 import Foundation
 import UltralyticsYOLO
 
-/// YOLO inference stays non-actor-isolated because CVPixelBuffer is a reference-backed
-/// Core Video type that is intentionally not Sendable under Swift 6 strict concurrency.
-/// ADASPipeline already serializes inference and keeps only the latest frame.
+/// Uses the same bundled-model loading path as the upstream Ultralytics iOS package.
+/// ADASPipeline serializes inference and keeps only the latest frame.
 final class UltralyticsDetectionEngine: @unchecked Sendable, ADASInferenceEngine {
     private var model: YOLO?
     private var loadingTask: Task<YOLO, Error>?
@@ -14,44 +13,31 @@ final class UltralyticsDetectionEngine: @unchecked Sendable, ADASInferenceEngine
         let yolo = try await loadedModel()
         let result = yolo(CIImage(cvPixelBuffer: pixelBuffer))
         let detections = result.boxes.map { box in
-            ADASDetection(
-                id: UUID(),
-                label: box.cls,
-                confidence: box.conf,
-                boundingBox: box.xywhn
-            )
+            ADASDetection(id: UUID(), label: box.cls, confidence: box.conf, boundingBox: box.xywhn)
         }
-        return ADASFrameResult(
-            source: source,
-            detections: RoadObjectFilter.relevant(detections),
-            processedAt: .now
-        )
+        return ADASFrameResult(source: source, detections: RoadObjectFilter.relevant(detections), processedAt: .now)
     }
 
     private func loadedModel() async throws -> YOLO {
-        if let model, model.isLoaded {
-            return model
-        }
-        if let loadingTask {
-            return try await loadingTask.value
-        }
+        if let model, model.isLoaded { return model }
+        if let loadingTask { return try await loadingTask.value }
 
         let task = Task<YOLO, Error> {
             try await withCheckedThrowingContinuation { continuation in
-                let remote = URL(string: "https://github.com/ultralytics/yolo-ios-app/releases/download/v8.3.0/yolo26n.mlpackage.zip")!
-                _ = YOLO(url: remote, task: .detect, useGpu: true, numItemsThreshold: 30) { result in
+                // Upstream YOLO 8.9.4 resolves this name from Bundle.main as
+                // yolo26n.mlmodelc first, then yolo26n.mlpackage.
+                _ = YOLO("yolo26n", task: .detect, useGpu: true, numItemsThreshold: 30) { result in
                     switch result {
                     case .success(let loaded):
                         loaded.setConfidenceThreshold(0.35)
                         continuation.resume(returning: loaded)
-                    case .failure:
-                        continuation.resume(throwing: EngineError.modelLoadFailed)
+                    case .failure(let error):
+                        continuation.resume(throwing: EngineError.modelLoadFailed(String(describing: error)))
                     }
                 }
             }
         }
         loadingTask = task
-
         do {
             let loaded = try await task.value
             model = loaded
@@ -63,5 +49,10 @@ final class UltralyticsDetectionEngine: @unchecked Sendable, ADASInferenceEngine
         }
     }
 
-    enum EngineError: Error { case modelLoadFailed }
+    enum EngineError: Error, LocalizedError {
+        case modelLoadFailed(String)
+        var errorDescription: String? {
+            switch self { case .modelLoadFailed(let detail): return "Bundled YOLO model failed: \(detail)" }
+        }
+    }
 }
