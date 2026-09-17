@@ -32,10 +32,10 @@ struct ContentView: View {
                 }.frame(maxHeight: .infinity).clipped()
 
                 HStack {
-                    Text(adas.inferenceActive ? "YOLO · \(adas.detections.count) objects · lanes \(adas.laneSegments.count)" : "YOLO loading · lanes \(adas.laneSegments.count)")
+                    Text(yoloStatus)
                     Spacer()
                     Text(String(format: "%.0f ms · age %.0f ms · drop %llu", adas.inferenceMilliseconds, adas.frameAgeMilliseconds, adas.replacedFrames))
-                }.font(.caption).foregroundStyle(.secondary)
+                }.font(.caption).foregroundStyle(adas.inferenceError == nil ? Color.secondary : Color.red)
 
                 HStack(spacing: 16) {
                     Toggle(isOn: $adas.soundEnabled) { Label("Sound", systemImage: adas.soundEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill") }.toggleStyle(.switch)
@@ -51,6 +51,11 @@ struct ContentView: View {
         .onDisappear { adas.stopRearCamera(); adas.stopA500S() }
     }
 
+    private var yoloStatus: String {
+        if let error = adas.inferenceError { return "YOLO ERROR · \(error)" }
+        if adas.inferenceActive { return "YOLO READY · \(adas.detections.count) objects · lanes \(adas.laneSegments.count)" }
+        return "YOLO loading · lanes \(adas.laneSegments.count)"
+    }
     private var a500sStatus: String { switch adas.a500sState { case .idle: "idle"; case .connecting: "connecting RTSP"; case .streaming: "RTSP connected"; case .failed(let message): "stream error: \(message)" } }
     private var riskText: String { switch adas.risk.level { case .clear: "CLEAR"; case .caution: "CAUTION"; case .warning: "WARNING" } }
     private var riskColor: Color { switch adas.risk.level { case .clear: .green; case .caution: .orange; case .warning: .red } }
