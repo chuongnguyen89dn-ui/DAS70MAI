@@ -66,15 +66,12 @@ final class ADASViewModel: ObservableObject {
     }
 
     nonisolated private func detectLanesIfNeeded(_ pixelBuffer: CVPixelBuffer) {
+        let segments = laneDetector.detect(pixelBuffer: pixelBuffer)
         Task { @MainActor [weak self] in
             guard let self else { return }
             self.laneFrameCounter += 1
             guard self.laneFrameCounter % 5 == 0 else { return }
-            let detector = self.laneDetector
-            Task.detached(priority: .utility) { [weak self] in
-                let segments = detector.detect(pixelBuffer: pixelBuffer)
-                await MainActor.run { self?.laneSegments = segments }
-            }
+            self.laneSegments = segments
         }
     }
 
