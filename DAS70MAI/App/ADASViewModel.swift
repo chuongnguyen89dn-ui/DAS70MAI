@@ -10,6 +10,7 @@ final class ADASViewModel: ObservableObject {
     let rearCamera = RearCameraSource()
     private let engine = UltralyticsDetectionEngine()
     private lazy var pipeline = ADASPipeline(engine: engine)
+    private var warningDebouncer = WarningDebouncer()
 
     init() {
         rearCamera.onFrame = { [weak self] frame in
@@ -20,9 +21,12 @@ final class ADASViewModel: ObservableObject {
             await pipeline.setResultHandler { [weak self] result in
                 let relevant = RoadObjectFilter.relevant(result.detections)
                 Task { @MainActor in
-                    self?.detections = relevant
-                    self?.risk = ForwardRiskEvaluator.evaluate(relevant)
-                    self?.inferenceActive = true
+                    guard let self else { return }
+                    detections = relevant
+                    let rawRisk = ForwardRiskEvaluator.evaluate(relevant)
+                    let stableLevel = warningDebouncer.update(with: rawRisk)
+                    risk = ForwardRisk(level: stableLevel, object: rawRisk.object)
+                    inferenceActive = true
                 }
             }
         }
@@ -32,6 +36,7 @@ final class ADASViewModel: ObservableObject {
     func stopRearCamera() {
         rearCamera.stop()
         detections = []
+        warningDebouncer.reset()
         risk = .init(level: .clear, object: nil)
         inferenceActive = false
     }
