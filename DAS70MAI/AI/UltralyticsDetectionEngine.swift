@@ -7,6 +7,7 @@ import UltralyticsYOLO
 /// ADASPipeline serializes inference and keeps only the latest frame.
 final class UltralyticsDetectionEngine: @unchecked Sendable, ADASInferenceEngine {
     private var model: YOLO?
+    private var loadingModel: YOLO?
     private var loadingTask: Task<YOLO, Error>?
 
     func infer(pixelBuffer: CVPixelBuffer, source: VideoSourceKind) async throws -> ADASFrameResult {
@@ -24,9 +25,10 @@ final class UltralyticsDetectionEngine: @unchecked Sendable, ADASInferenceEngine
 
         let task = Task<YOLO, Error> {
             try await withCheckedThrowingContinuation { continuation in
-                // Upstream YOLO 8.9.4 resolves this name from Bundle.main as
-                // yolo26n.mlmodelc first, then yolo26n.mlpackage.
-                _ = YOLO("yolo26n", task: .detect, useGpu: true, numItemsThreshold: 30) { result in
+                // Keep the loader alive. Upstream model loading is asynchronous and
+                // uses weak self internally, so discarding this instance can leave
+                // the continuation waiting forever on a physical device.
+                let candidate = YOLO("yolo26n", task: .detect, useGpu: true, numItemsThreshold: 30) { result in
                     switch result {
                     case .success(let loaded):
                         loaded.setConfidenceThreshold(0.35)
@@ -35,15 +37,18 @@ final class UltralyticsDetectionEngine: @unchecked Sendable, ADASInferenceEngine
                         continuation.resume(throwing: EngineError.modelLoadFailed(String(describing: error)))
                     }
                 }
+                self.loadingModel = candidate
             }
         }
         loadingTask = task
         do {
             let loaded = try await task.value
             model = loaded
+            loadingModel = nil
             loadingTask = nil
             return loaded
         } catch {
+            loadingModel = nil
             loadingTask = nil
             throw error
         }
