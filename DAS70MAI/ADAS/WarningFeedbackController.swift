@@ -6,6 +6,9 @@ import UIKit
 /// This does not claim calibrated FCW/TTC behavior.
 @MainActor
 final class WarningFeedbackController {
+    var soundEnabled = true
+    var vibrationEnabled = true
+
     private var lastLevel: ForwardRisk.Level = .clear
     private var lastWarningAt = Date.distantPast
     private let warningCooldown: TimeInterval = 1.5
@@ -18,13 +21,13 @@ final class WarningFeedbackController {
         case .clear:
             return
         case .caution:
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            if vibrationEnabled { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
         case .warning:
             let now = Date()
             guard now.timeIntervalSince(lastWarningAt) >= warningCooldown else { return }
             lastWarningAt = now
-            UINotificationFeedbackGenerator().notificationOccurred(.warning)
-            AudioServicesPlaySystemSound(1106)
+            if vibrationEnabled { UINotificationFeedbackGenerator().notificationOccurred(.warning) }
+            if soundEnabled { AudioServicesPlaySystemSound(1106) }
         }
     }
 
