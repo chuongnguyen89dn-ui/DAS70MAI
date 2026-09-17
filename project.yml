@@ -6,13 +6,11 @@ options:
   createIntermediateGroups: true
 settings:
   base:
-    SWIFT_VERSION: "6.0"
+    SWIFT_VERSION: "5.0"
+    SWIFT_STRICT_CONCURRENCY: minimal
     TARGETED_DEVICE_FAMILY: "1"
     SUPPORTS_MACCATALYST: "NO"
 packages:
-  UltralyticsYOLO:
-    url: https://github.com/ultralytics/yolo-ios-app.git
-    from: 8.9.4
   VLCKit:
     url: https://github.com/videolan/vlckit.git
     branch: master
@@ -22,20 +20,16 @@ targets:
     platform: iOS
     deploymentTarget: "16.0"
     sources:
-      - path: DAS70MAI
+      - path: ConnectionOnly
     dependencies:
-      - package: UltralyticsYOLO
-        product: UltralyticsYOLO
       - package: VLCKit
         product: VLCKit
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.das70mai.app
+        PRODUCT_BUNDLE_IDENTIFIER: com.das70mai.connectiontest
         GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: DAS70MAI
-        INFOPLIST_KEY_NSCameraUsageDescription: DAS70MAI uses the rear iPhone camera as a manually selected ADAS test source.
-        INFOPLIST_KEY_NSLocalNetworkUsageDescription: DAS70MAI connects to a manually selected 70mai A500S camera on the local network.
-        INFOPLIST_KEY_SeventyMaiToken: "$(SEVENTYMAI_TOKEN)"
+        INFOPLIST_KEY_CFBundleDisplayName: DAS70MAI Connect
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: DAS70MAI connects directly to the 70mai A500S camera on its local Wi-Fi network.
         CODE_SIGN_STYLE: Automatic
     scheme:
       gatherCoverageData: false
