@@ -20,13 +20,13 @@ final class ADASViewModel: ObservableObject {
         Task {
             await pipeline.setResultHandler { [weak self] result in
                 let relevant = RoadObjectFilter.relevant(result.detections)
-                Task { @MainActor in
+                Task { @MainActor [weak self] in
                     guard let self else { return }
-                    detections = relevant
+                    self.detections = relevant
                     let rawRisk = ForwardRiskEvaluator.evaluate(relevant)
-                    let stableLevel = warningDebouncer.update(with: rawRisk)
-                    risk = ForwardRisk(level: stableLevel, object: rawRisk.object)
-                    inferenceActive = true
+                    let stableLevel = self.warningDebouncer.update(with: rawRisk)
+                    self.risk = ForwardRisk(level: stableLevel, object: rawRisk.object)
+                    self.inferenceActive = true
                 }
             }
         }
