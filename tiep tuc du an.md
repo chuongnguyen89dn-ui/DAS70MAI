@@ -103,3 +103,14 @@ Trang thai: REAR CAMERA RUNTIME VERIFIED; YOLO/LANE RUNTIME NOT VERIFIED
 - Da them inference error propagation tu ADASPipeline -> ViewModel -> UI. Lan test tiep UI se hien `YOLO READY` khi co inference result hoac `YOLO ERROR · <detail>` neu model/runtime that bai, thay vi treo `YOLO loading` vo han.
 - CHUA VERIFIED tren device: local yolo26n load thanh cong, real detection boxes, latency, lane candidates, warning trigger.
 - Blocker A500S van la camera vat ly: RTSP compatibility va end-to-end latency chua co runtime evidence.
+
+## 2026-09-17 — Restore xADAS A500S VLC path after physical VLC comparison
+
+Trang thai: IMPLEMENTED, CI/RUNTIME NOT YET VERIFIED
+
+- User da xac nhan A500S phat video that trong VLC bang `rtsp://192.168.0.1/00000000`; giu co dinh endpoint nay, khong tiep tuc doan endpoint khac.
+- Doi chieu truc tiep upstream `hmtnvac-cpu/xADAS-iOS` `SeventyMaiPlayerView.swift` voi `A500SRTSPSource.swift` phat hien DAS70MAI da bo mat buoc quan trong cua xADAS: `VLCMediaPlayer.drawable` duoc gan vao mot `UIView` truoc khi `play()`. VLC co the vao state `.playing` nhung khong tao video output dung cho snapshot neu khong co drawable.
+- Da khoi phuc dung huong xADAS: tao/giu private VLC drawable 960x540, gan drawable truoc play, delay play 0.25s, giu network/live caching 180ms, clock jitter/synchro 0, drop/skip late frames.
+- Da khoi phuc `frameProcessing` gate cua xADAS de khong snapshot/ghi file chong len frame dang chuyen thanh CVPixelBuffer.
+- Sua false-positive: `.playing` khong con duoc coi la A500S streaming. Chi khi `snapshotTaken` nhan anh decode that moi phat state `.streaming`, sau do frame van vao chung CVPixelBuffer -> AI/ADAS pipeline.
+- KHONG danh dau VERIFIED: can GitHub Actions build xanh va test tren iPhone/A500S that. Neu build xanh, ban nay la ban can cai de test lai A500S truoc khi thay doi transport tiep.
