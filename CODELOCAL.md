@@ -15,11 +15,15 @@ This repository is the persistent workspace for DAS70MAI. Continue from reposito
 7. Record progress immediately in `tiep tuc du an.md`.
 
 ## DAS70MAI direction
-- Target: iPhone workflow/application using a 70mai A500S as the camera source.
-- Do not substitute the iPhone camera for the A500S camera stream.
-- Establish and measure the existing 70mai stream path first, especially latency.
-- Prefer proven 70mai protocol/stream implementations from existing projects over reverse-engineering from guesses.
-- Add AI/ADAS components only on top of a verified camera-stream path.
+- iOS 16.0+; iPhone-only. iPhone 14 Pro/A16 is the primary physical performance test target.
+- Camera source is selected manually by the user: `70mai A500S` or `iPhone Rear`.
+- `iPhone Rear` is a development/test source for times when the A500S is not physically available.
+- Never use the front/selfie camera.
+- Never automatically switch camera source when the A500S disconnects or reconnects.
+- Both camera sources must feed the same `CVPixelBuffer -> latest-frame-wins -> AI/Core ML -> ADAS -> UI/alerts` pipeline.
+- Rear iPhone camera is used first to develop and validate AI/ADAS; A500S RTSP/RTP is integrated into the same pipeline afterward.
+- Prefer proven upstream 70mai/RTSP/YOLO implementations over guessed protocols or custom reinvention.
+- Do not raise the iOS minimum without a verified dependency or measured technical reason.
 
 ## State labels
 - VERIFIED: actual build/runtime/device evidence exists.
