@@ -2,8 +2,8 @@ import Foundation
 import UIKit
 import VLCKit
 
-/// A500S transport based on the previously working xADAS V0.9.5 VLC path.
-/// It intentionally opens the fixed A500S front stream directly without token setup.
+/// A500S transport restored from the proven xADAS SeventyMaiPlayerView VLC path.
+/// Fixed stream: rtsp://192.168.0.1/00000000. No automatic source switching.
 final class A500SRTSPSource: NSObject, @unchecked Sendable, VLCMediaPlayerDelegate {
     enum State: Sendable, Equatable {
         case idle
@@ -16,10 +16,16 @@ final class A500SRTSPSource: NSObject, @unchecked Sendable, VLCMediaPlayerDelega
     var onPixelBuffer: (@Sendable (CVPixelBuffer) -> Void)?
 
     private let player = VLCMediaPlayer()
+    // xADAS attaches VLC to a real UIView drawable before playback. The previous
+    // DAS70MAI adapter omitted this, so VLC could enter .playing without creating
+    // a usable video output for snapshots. Keep a private drawable because preview
+    // is rendered from the common CVPixelBuffer pipeline, not directly by VLC.
+    private var vlcDrawable: UIView?
     private var snapshotTimer: Timer?
     private var watchdogTimer: Timer?
     private var reconnectWorkItem: DispatchWorkItem?
     private var snapshotInFlight = false
+    private var frameProcessing = false
     private var snapshotPath: String?
     private var snapshotCounter: UInt64 = 0
     private var stoppedByOwner = true
@@ -53,6 +59,8 @@ final class A500SRTSPSource: NSObject, @unchecked Sendable, VLCMediaPlayerDelega
             onStateChanged?(.failed("invalid A500S RTSP URL"))
             return
         }
+
+        // Match xADAS A500S VLC options exactly.
         media.addOption(":network-caching=180")
         media.addOption(":live-caching=180")
         media.addOption(":clock-jitter=0")
@@ -60,8 +68,23 @@ final class A500SRTSPSource: NSObject, @unchecked Sendable, VLCMediaPlayerDelega
         media.addOption(":drop-late-frames")
         media.addOption(":skip-frames")
         player.media = media
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !self.stoppedByOwner else { return }
+            if self.vlcDrawable == nil {
+                let view = UIView(frame: CGRect(x: 0, y: 0, width: 960, height: 540))
+                view.backgroundColor = .black
+                self.vlcDrawable = view
+            }
+            self.player.drawable = self.vlcDrawable
+        }
+
+        // xADAS deliberately delays play briefly after media/drawable setup.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
             guard let self, !self.stoppedByOwner else { return }
+            if self.player.drawable == nil {
+                self.player.drawable = self.vlcDrawable
+            }
             self.player.play()
         }
     }
@@ -72,6 +95,7 @@ final class A500SRTSPSource: NSObject, @unchecked Sendable, VLCMediaPlayerDelega
         reconnectWorkItem = nil
         stopSnapshotLoop()
         player.stop()
+        player.drawable = nil
         onStateChanged?(.idle)
     }
 
@@ -82,7 +106,8 @@ final class A500SRTSPSource: NSObject, @unchecked Sendable, VLCMediaPlayerDelega
         case .playing:
             consecutiveFailures = 0
             lastFrameAt = ProcessInfo.processInfo.systemUptime
-            onStateChanged?(.streaming)
+            // .playing means RTSP/VLC state only. Actual frame delivery is
+            // established by snapshotTaken and the CVPixelBuffer callback.
             startSnapshotLoop()
         case .error:
             stopSnapshotLoop()
@@ -111,9 +136,10 @@ final class A500SRTSPSource: NSObject, @unchecked Sendable, VLCMediaPlayerDelega
 
     private func startSnapshotLoop() {
         guard snapshotTimer == nil else { return }
+        lastFrameAt = ProcessInfo.processInfo.systemUptime
         snapshotTimer = Timer.scheduledTimer(withTimeInterval: 0.18, repeats: true) { [weak self] _ in self?.requestSnapshot() }
         watchdogTimer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: true) { [weak self] _ in
-            guard let self, self.player.state == .playing,
+            guard let self, self.player.state == .playing, !self.frameProcessing,
                   ProcessInfo.processInfo.systemUptime - self.lastFrameAt > 2.4 else { return }
             self.scheduleReconnect(reason: "A500S video stalled")
         }
@@ -124,34 +150,43 @@ final class A500SRTSPSource: NSObject, @unchecked Sendable, VLCMediaPlayerDelega
         snapshotTimer?.invalidate(); snapshotTimer = nil
         watchdogTimer?.invalidate(); watchdogTimer = nil
         snapshotInFlight = false
+        frameProcessing = false
         if let snapshotPath { try? FileManager.default.removeItem(atPath: snapshotPath) }
         snapshotPath = nil
     }
 
     private func requestSnapshot() {
-        guard player.state == .playing, !snapshotInFlight else { return }
+        guard player.state == .playing, !snapshotInFlight, !frameProcessing else { return }
         snapshotCounter &+= 1
         let path = FileManager.default.temporaryDirectory.appendingPathComponent("das70mai-a500s-\(snapshotCounter % 2).png").path
         try? FileManager.default.removeItem(atPath: path)
         snapshotPath = path
         snapshotInFlight = true
         player.saveVideoSnapshot(at: path, withWidth: 960, andHeight: 540)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in self?.snapshotInFlight = false }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
+            guard let self, self.snapshotInFlight else { return }
+            self.snapshotInFlight = false
+        }
     }
 
     @objc private func snapshotTaken(_ notification: Notification) {
         guard let path = snapshotPath else { snapshotInFlight = false; return }
         snapshotInFlight = false
         snapshotPath = nil
+        frameProcessing = true
         lastFrameAt = ProcessInfo.processInfo.systemUptime
+        // Only a real decoded snapshot is allowed to promote A500S to streaming.
+        onStateChanged?(.streaming)
         frameQueue.async { [weak self] in
             guard let self, let image = UIImage(contentsOfFile: path), let cgImage = image.cgImage,
                   let pixelBuffer = Self.makePixelBuffer(from: cgImage) else {
                 try? FileManager.default.removeItem(atPath: path)
+                DispatchQueue.main.async { [weak self] in self?.frameProcessing = false }
                 return
             }
             try? FileManager.default.removeItem(atPath: path)
             self.onPixelBuffer?(pixelBuffer)
+            DispatchQueue.main.async { [weak self] in self?.frameProcessing = false }
         }
     }
 
