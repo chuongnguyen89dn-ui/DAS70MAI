@@ -35,6 +35,7 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: DAS70MAI
         INFOPLIST_KEY_NSCameraUsageDescription: DAS70MAI uses the rear iPhone camera as a manually selected ADAS test source.
         INFOPLIST_KEY_NSLocalNetworkUsageDescription: DAS70MAI connects to a manually selected 70mai A500S camera on the local network.
+        INFOPLIST_KEY_SeventyMaiToken: "$(SEVENTYMAI_TOKEN)"
         CODE_SIGN_STYLE: Automatic
     scheme:
       gatherCoverageData: false
