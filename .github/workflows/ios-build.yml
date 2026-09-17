@@ -2,7 +2,7 @@ name: iOS Build
 
 on:
   push:
-    branches: [feature-dual-source]
+    branches: [feature-dual-source, feature-xadas-native-rtsp]
   pull_request:
     branches: [main]
 
