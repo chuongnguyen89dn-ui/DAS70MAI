@@ -45,3 +45,25 @@ Trang thai: IMPLEMENTED, NOT VERIFIED
 - Tich hop upstream YOLO iOS thay vi tu viet inference.
 - Build/test camera sau tren iPhone va ghi benchmark.
 - Tich hop IPCamKit/A500S sau khi pipeline iPhone test chay.
+
+## 2026-09-17 — Build + live rear preview + YOLO pipeline
+
+Trang thai: IMPLEMENTED, PARTLY BUILD-VERIFIED
+
+- VERIFIED bang GitHub Actions: XcodeGen project va iOS Simulator build da thanh cong truoc khi noi inference runtime; live rear-camera preview source van can iPhone vat ly de runtime-verify.
+- Da them camera permission handling, `AVCaptureVideoPreviewLayer`, rear-camera start/stop va manual source UI.
+- Da tich hop Swift Package `UltralyticsYOLO`; CI da resolve va compile upstream package 8.9.14.
+- Da them `UltralyticsDetectionEngine`: CVPixelBuffer -> CIImage -> YOLO detect -> normalized boxes -> road-object filter.
+- Da them bounding-box overlay, road object filter va forward-risk visual heuristic. Risk heuristic CHUA PHAI TTC/FCW da hieu chuan.
+- Da noi `ADASViewModel`: rear-camera frames -> latest-frame pipeline -> YOLO -> detections -> overlay/risk UI.
+- CI run #15 phat hien Swift 6 Sendable error khi actor nhan `CVPixelBuffer`; da sua engine thanh nonisolated thread-safe class de khong gui CVPixelBuffer qua actor boundary rieng cua engine. Dang cho CI xac nhan fix.
+- Da sua `CODELOCAL.md` theo policy camera moi: user chon thu cong A500S/iPhone Rear, khong auto fallback, khong front camera.
+
+### Blocker vat ly
+- CHUA XAC MINH tren iPhone 14 Pro: camera preview, YOLO model download/cache, FPS/inference latency, bounding-box alignment va thermal.
+- CHUA XAC MINH A500S: RTSP endpoint/protocol va latency tren camera that.
+
+### Tiep theo
+- Fix den khi CI xanh voi full YOLO/UI chain.
+- Sau CI xanh, them metrics inference/frame-age va canh bao audio/haptic co debounce.
+- Sau do tich hop A500S RTSP vao cung VideoSource/CVPixelBuffer pipeline; khong thay doi source tu dong.
