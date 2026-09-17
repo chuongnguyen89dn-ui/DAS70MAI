@@ -1,0 +1,28 @@
+name: DAS70MAI
+options:
+  bundleIdPrefix: com.das70mai
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    TARGETED_DEVICE_FAMILY: "1"
+    SUPPORTS_MACCATALYST: "NO"
+targets:
+  DAS70MAI:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: DAS70MAI
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.das70mai.app
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: DAS70MAI
+        INFOPLIST_KEY_NSCameraUsageDescription: DAS70MAI uses the rear iPhone camera as a manually selected ADAS test source.
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: DAS70MAI connects to a manually selected 70mai A500S camera on the local network.
+        CODE_SIGN_STYLE: Automatic
+    scheme:
+      gatherCoverageData: false

@@ -25,3 +25,23 @@ Trang thai: VERIFIED (repository workspace)
 - CHUA XAC MINH: chua co build iPhone.
 - CHUA XAC MINH: chua do latency A500S trong implementation cua repo.
 - CHUA XAC MINH: chua chot module AI/ADAS.
+
+## 2026-09-17 — Camera test source + compatibility baseline
+
+Trang thai: IMPLEMENTED, NOT VERIFIED
+
+- Yeu cau moi thay the huong camera cu: nguoi dung tu chon `70mai A500S` hoac `iPhone Rear`; khong tu dong fallback.
+- `iPhone Rear` la nguon test/development khi khong co A500S tai cho; tuyet doi khong dung selfie/front camera.
+- Hai nguon dung chung CVPixelBuffer -> AI/ADAS pipeline va latest-frame-wins.
+- Da them manual source coordinator, rear AVCapture source, segmented source picker va common ADAS inference boundary tren branch `feature-dual-source`.
+- Chot baseline hien tai: iOS 16.0+ de phu hop IPCamKit (iOS 16+/Swift 6) va app Ultralytics hien tai.
+- iPhone 14 Pro (A16) la primary physical test target hien tai.
+- Cac iPhone iOS 16 khac chi la compatibility candidate cho den khi co benchmark thuc te; khong tu suy dien may cu chay ADAS real-time tot.
+- Them `docs/COMPATIBILITY.md` de theo doi device/chip, FPS, inference p50/p95, end-to-end frame age, thermal va memory.
+- AI huong Core ML/Vision; model nano-class ban dau. Khong nang minimum iOS neu khong co ly do do duoc.
+
+### Viec tiep theo
+- Tao project iOS buildable voi deployment target 16.0.
+- Tich hop upstream YOLO iOS thay vi tu viet inference.
+- Build/test camera sau tren iPhone va ghi benchmark.
+- Tich hop IPCamKit/A500S sau khi pipeline iPhone test chay.
