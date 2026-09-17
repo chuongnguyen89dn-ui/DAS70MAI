@@ -20,7 +20,6 @@ final class ADASViewModel: ObservableObject {
 
     let rearCamera = RearCameraSource()
     private let a500s = A500SRTSPSource()
-    private let a500sDecoder = H264VideoToolboxDecoder()
     private let engine = UltralyticsDetectionEngine()
     private let laneDetector = LaneDetector()
     private lazy var pipeline = ADASPipeline(engine: engine)
@@ -36,9 +35,10 @@ final class ADASViewModel: ObservableObject {
             Task { await self.pipeline.submit(frame) }
             self.detectLanesIfNeeded(frame.pixelBuffer, source: .iPhoneRear)
         }
-        a500s.onStateChanged = { [weak self] state in Task { @MainActor [weak self] in self?.a500sState = state } }
-        a500s.onH264AccessUnit = { [weak self] nalus, _, _ in self?.a500sDecoder.decode(nalus: nalus) }
-        a500sDecoder.onPixelBuffer = { [weak self] pixelBuffer in
+        a500s.onStateChanged = { [weak self] state in
+            Task { @MainActor [weak self] in self?.a500sState = state }
+        }
+        a500s.onPixelBuffer = { [weak self] pixelBuffer in
             guard let self else { return }
             let frame = VideoFrame(pixelBuffer: pixelBuffer, source: .a500s, receivedAt: .now)
             Task { await self.pipeline.submit(frame) }
@@ -87,52 +87,25 @@ final class ADASViewModel: ObservableObject {
             Task.detached(priority: .utility) { [laneDetector] in
                 let segments = laneDetector.detect(pixelBuffer: pixelBuffer)
                 await MainActor.run { [weak self] in
-                    guard let self,
-                          self.activeSource == source,
-                          self.sourceGeneration == generation else { return }
+                    guard let self, self.activeSource == source, self.sourceGeneration == generation else { return }
                     self.laneSegments = segments
                 }
             }
         }
     }
 
-    func startRearCamera() {
-        stopA500S()
-        beginSource(.iPhoneRear)
-        rearCamera.start()
-    }
-
-    func startA500S() {
-        rearCamera.stop()
-        beginSource(.a500s)
-        a500s.start()
-    }
-
-    func stopRearCamera() {
-        rearCamera.stop()
-        endSource(.iPhoneRear)
-    }
-
-    func stopA500S() {
-        a500s.stop()
-        a500sDecoder.reset()
-        a500sFrame = nil
-        endSource(.a500s)
-    }
+    func startRearCamera() { stopA500S(); beginSource(.iPhoneRear); rearCamera.start() }
+    func startA500S() { rearCamera.stop(); beginSource(.a500s); a500s.start() }
+    func stopRearCamera() { rearCamera.stop(); endSource(.iPhoneRear) }
+    func stopA500S() { a500s.stop(); a500sFrame = nil; endSource(.a500s) }
 
     private func beginSource(_ source: VideoSourceKind) {
-        sourceGeneration &+= 1
-        activeSource = source
-        resetRuntime()
+        sourceGeneration &+= 1; activeSource = source; resetRuntime()
     }
-
     private func endSource(_ source: VideoSourceKind) {
         guard activeSource == source else { return }
-        sourceGeneration &+= 1
-        activeSource = nil
-        resetRuntime()
+        sourceGeneration &+= 1; activeSource = nil; resetRuntime()
     }
-
     private func resetRuntime() {
         detections = []; laneSegments = []; laneFrameCounter = 0
         warningDebouncer.reset(); warningFeedback.reset()
