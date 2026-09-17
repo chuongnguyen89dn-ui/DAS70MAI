@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var selection: CameraSelection = .iPhoneRearCamera
+    @State private var rearCamera = RearCameraSource()
 
     var body: some View {
         ZStack {
@@ -18,21 +19,27 @@ struct ContentView: View {
                     }
                     Spacer()
                     Circle()
-                        .fill(.orange)
+                        .fill(selection == .iPhoneRearCamera ? .green : .orange)
                         .frame(width: 10, height: 10)
                 }
 
                 ZStack {
                     RoundedRectangle(cornerRadius: 18)
                         .fill(Color.white.opacity(0.06))
-                    VStack(spacing: 10) {
-                        Image(systemName: selection == .a500s ? "video.fill" : "iphone.gen3")
-                            .font(.system(size: 44))
-                        Text(selection == .a500s ? "A500S stream" : "Rear camera test")
-                            .font(.headline)
-                        Text("Video preview will use the selected source only")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+
+                    if selection == .iPhoneRearCamera {
+                        RearCameraPreview(session: rearCamera.session)
+                            .clipShape(RoundedRectangle(cornerRadius: 18))
+                    } else {
+                        VStack(spacing: 10) {
+                            Image(systemName: "video.fill")
+                                .font(.system(size: 44))
+                            Text("70mai A500S")
+                                .font(.headline)
+                            Text("RTSP integration is the next camera source")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
                 .frame(maxHeight: .infinity)
@@ -43,5 +50,16 @@ struct ContentView: View {
             .foregroundStyle(.white)
         }
         .preferredColorScheme(.dark)
+        .onAppear {
+            if selection == .iPhoneRearCamera { rearCamera.start() }
+        }
+        .onChange(of: selection) { newValue in
+            if newValue == .iPhoneRearCamera {
+                rearCamera.start()
+            } else {
+                rearCamera.stop()
+            }
+        }
+        .onDisappear { rearCamera.stop() }
     }
 }
