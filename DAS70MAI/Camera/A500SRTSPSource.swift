@@ -1,9 +1,10 @@
 import Foundation
-import IPCamKit
+import UIKit
+import VLCKit
 
-/// Owns the A500S RTSP session. H.264 access units are emitted immediately so the
-/// decoder/ADAS stage can discard stale frames instead of building a playback queue.
-final class A500SRTSPSource: @unchecked Sendable {
+/// A500S transport based on the previously working xADAS V0.9.5 VLC path.
+/// It intentionally opens the fixed A500S front stream directly without token setup.
+final class A500SRTSPSource: NSObject, @unchecked Sendable, VLCMediaPlayerDelegate {
     enum State: Sendable, Equatable {
         case idle
         case connecting
@@ -12,64 +13,160 @@ final class A500SRTSPSource: @unchecked Sendable {
     }
 
     var onStateChanged: (@Sendable (State) -> Void)?
-    var onH264AccessUnit: (@Sendable ([Data], Double, Bool) -> Void)?
+    var onPixelBuffer: (@Sendable (CVPixelBuffer) -> Void)?
 
-    private let profile = A500SStreamProfile()
-    private var session: RTSPClientSession?
-    private var task: Task<Void, Never>?
+    private let player = VLCMediaPlayer()
+    private var snapshotTimer: Timer?
+    private var watchdogTimer: Timer?
+    private var reconnectWorkItem: DispatchWorkItem?
+    private var snapshotInFlight = false
+    private var snapshotPath: String?
+    private var snapshotCounter: UInt64 = 0
+    private var stoppedByOwner = true
+    private var lastFrameAt = ProcessInfo.processInfo.systemUptime
+    private var consecutiveFailures = 0
+    private let frameQueue = DispatchQueue(label: "das70mai.a500s.frame", qos: .userInitiated)
+    private let streamURL = "rtsp://192.168.0.1/00000000"
+
+    override init() {
+        super.init()
+        player.delegate = self
+        NotificationCenter.default.addObserver(self, selector: #selector(snapshotTaken(_:)), name: VLCMediaPlayer.snapshotTakenNotification, object: player)
+    }
+
+    deinit { NotificationCenter.default.removeObserver(self) }
 
     func start() {
         stop()
-        onStateChanged?(.connecting)
-        A500SPreviewSession.shared.prepare(host: profile.host) { [weak self] in
-            guard let self else { return }
-            self.startRTSP()
-        }
+        stoppedByOwner = false
+        consecutiveFailures = 0
+        startPlayer()
     }
 
-    private func startRTSP() {
-        task = Task { [weak self] in
-            guard let self else { return }
-            let session = RTSPClientSession(
-                url: self.profile.discoveryURL.absoluteString,
-                transport: .udp,
-                userAgent: "DAS70MAI"
-            )
-            self.session = session
-            do {
-                let description = try await session.start()
-                guard description.video?.codec == .h264 else {
-                    throw StreamError.unsupportedVideoCodec
-                }
-                self.onStateChanged?(.streaming)
-                for try await item in session.frames() {
-                    guard !Task.isCancelled else { break }
-                    if case .video(let frame) = item {
-                        self.onH264AccessUnit?(frame.nalus, frame.timestamp, frame.isKeyframe)
-                    }
-                }
-            } catch is CancellationError {
-                // Expected when the user switches camera source.
-            } catch {
-                self.onStateChanged?(.failed(String(describing: error)))
-            }
-            await session.stop()
+    private func startPlayer() {
+        reconnectWorkItem?.cancel()
+        reconnectWorkItem = nil
+        stopSnapshotLoop()
+        onStateChanged?(.connecting)
+        player.stop()
+        guard let url = URL(string: streamURL), let media = VLCMedia(url: url) else {
+            onStateChanged?(.failed("invalid A500S RTSP URL"))
+            return
+        }
+        media.addOption(":network-caching=180")
+        media.addOption(":live-caching=180")
+        media.addOption(":clock-jitter=0")
+        media.addOption(":clock-synchro=0")
+        media.addOption(":drop-late-frames")
+        media.addOption(":skip-frames")
+        player.media = media
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+            guard let self, !self.stoppedByOwner else { return }
+            self.player.play()
         }
     }
 
     func stop() {
-        task?.cancel()
-        task = nil
-        let oldSession = session
-        session = nil
-        if let oldSession {
-            Task { await oldSession.stop() }
-        }
-        A500SPreviewSession.shared.reset()
+        stoppedByOwner = true
+        reconnectWorkItem?.cancel()
+        reconnectWorkItem = nil
+        stopSnapshotLoop()
+        player.stop()
         onStateChanged?(.idle)
     }
 
-    enum StreamError: Error {
-        case unsupportedVideoCodec
+    func mediaPlayerStateChanged(_ newState: VLCMediaPlayerState) {
+        switch newState {
+        case .opening:
+            onStateChanged?(.connecting)
+        case .playing:
+            consecutiveFailures = 0
+            lastFrameAt = ProcessInfo.processInfo.systemUptime
+            onStateChanged?(.streaming)
+            startSnapshotLoop()
+        case .error:
+            stopSnapshotLoop()
+            scheduleReconnect(reason: "VLC RTSP error")
+        case .stopped:
+            stopSnapshotLoop()
+            if !stoppedByOwner { scheduleReconnect(reason: "VLC RTSP stopped") }
+        default:
+            break
+        }
+    }
+
+    private func scheduleReconnect(reason: String) {
+        guard reconnectWorkItem == nil, !stoppedByOwner else { return }
+        consecutiveFailures += 1
+        let delay = min(5.0, 0.8 + Double(consecutiveFailures - 1) * 0.8)
+        onStateChanged?(.failed("\(reason); retry \(String(format: "%.1f", delay))s"))
+        let item = DispatchWorkItem { [weak self] in
+            guard let self, !self.stoppedByOwner else { return }
+            self.reconnectWorkItem = nil
+            self.startPlayer()
+        }
+        reconnectWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
+    }
+
+    private func startSnapshotLoop() {
+        guard snapshotTimer == nil else { return }
+        snapshotTimer = Timer.scheduledTimer(withTimeInterval: 0.18, repeats: true) { [weak self] _ in self?.requestSnapshot() }
+        watchdogTimer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: true) { [weak self] _ in
+            guard let self, self.player.state == .playing,
+                  ProcessInfo.processInfo.systemUptime - self.lastFrameAt > 2.4 else { return }
+            self.scheduleReconnect(reason: "A500S video stalled")
+        }
+        requestSnapshot()
+    }
+
+    private func stopSnapshotLoop() {
+        snapshotTimer?.invalidate(); snapshotTimer = nil
+        watchdogTimer?.invalidate(); watchdogTimer = nil
+        snapshotInFlight = false
+        if let snapshotPath { try? FileManager.default.removeItem(atPath: snapshotPath) }
+        snapshotPath = nil
+    }
+
+    private func requestSnapshot() {
+        guard player.state == .playing, !snapshotInFlight else { return }
+        snapshotCounter &+= 1
+        let path = FileManager.default.temporaryDirectory.appendingPathComponent("das70mai-a500s-\(snapshotCounter % 2).png").path
+        try? FileManager.default.removeItem(atPath: path)
+        snapshotPath = path
+        snapshotInFlight = true
+        player.saveVideoSnapshot(at: path, withWidth: 960, andHeight: 540)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in self?.snapshotInFlight = false }
+    }
+
+    @objc private func snapshotTaken(_ notification: Notification) {
+        guard let path = snapshotPath else { snapshotInFlight = false; return }
+        snapshotInFlight = false
+        snapshotPath = nil
+        lastFrameAt = ProcessInfo.processInfo.systemUptime
+        frameQueue.async { [weak self] in
+            guard let self, let image = UIImage(contentsOfFile: path), let cgImage = image.cgImage,
+                  let pixelBuffer = Self.makePixelBuffer(from: cgImage) else {
+                try? FileManager.default.removeItem(atPath: path)
+                return
+            }
+            try? FileManager.default.removeItem(atPath: path)
+            self.onPixelBuffer?(pixelBuffer)
+        }
+    }
+
+    private static func makePixelBuffer(from image: CGImage) -> CVPixelBuffer? {
+        let attrs: [CFString: Any] = [kCVPixelBufferCGImageCompatibilityKey: true, kCVPixelBufferCGBitmapContextCompatibilityKey: true, kCVPixelBufferIOSurfacePropertiesKey: [:]]
+        var buffer: CVPixelBuffer?
+        guard CVPixelBufferCreate(kCFAllocatorDefault, image.width, image.height, kCVPixelFormatType_32BGRA, attrs as CFDictionary, &buffer) == kCVReturnSuccess,
+              let buffer else { return nil }
+        CVPixelBufferLockBaseAddress(buffer, [])
+        defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
+        guard let base = CVPixelBufferGetBaseAddress(buffer), let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+              let context = CGContext(data: base, width: image.width, height: image.height, bitsPerComponent: 8,
+                                      bytesPerRow: CVPixelBufferGetBytesPerRow(buffer), space: colorSpace,
+                                      bitmapInfo: CGBitmapInfo.byteOrder32Little.rawValue | CGImageAlphaInfo.premultipliedFirst.rawValue) else { return nil }
+        context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        return buffer
     }
 }
