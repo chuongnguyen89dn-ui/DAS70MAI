@@ -28,3 +28,32 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO \
             build
+      - name: Build unsigned iPhone app
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project DAS70MAI.xcodeproj \
+            -scheme DAS70MAI \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/DAS70MAI-Device" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build
+      - name: Package unsigned IPA
+        run: |
+          APP="$RUNNER_TEMP/DAS70MAI-Device/Build/Products/Release-iphoneos/DAS70MAI.app"
+          test -d "$APP"
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$APP" "$RUNNER_TEMP/ipa/Payload/"
+          cd "$RUNNER_TEMP/ipa"
+          /usr/bin/zip -qry "$GITHUB_WORKSPACE/DAS70MAI-unsigned.ipa" Payload
+          ls -lh "$GITHUB_WORKSPACE/DAS70MAI-unsigned.ipa"
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: DAS70MAI-unsigned-ipa
+          path: DAS70MAI-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 7
