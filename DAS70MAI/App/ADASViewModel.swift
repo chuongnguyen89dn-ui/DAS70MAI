@@ -9,6 +9,7 @@ final class ADASViewModel: ObservableObject {
     @Published var laneSegments: [LaneSegment] = []
     @Published var risk: ForwardRisk = .init(level: .clear, object: nil)
     @Published var inferenceActive = false
+    @Published var inferenceError: String?
     @Published var inferenceMilliseconds: Double = 0
     @Published var frameAgeMilliseconds: Double = 0
     @Published var replacedFrames: UInt64 = 0
@@ -57,7 +58,14 @@ final class ADASViewModel: ObservableObject {
                     self.inferenceMilliseconds = metrics.inferenceMilliseconds
                     self.frameAgeMilliseconds = metrics.frameAgeMilliseconds
                     self.replacedFrames = metrics.replacedFrames
+                    self.inferenceError = nil
                     self.inferenceActive = true
+                }
+            }
+            await pipeline.setErrorHandler { [weak self] message in
+                Task { @MainActor [weak self] in
+                    self?.inferenceActive = false
+                    self?.inferenceError = message
                 }
             }
         }
@@ -82,6 +90,6 @@ final class ADASViewModel: ObservableObject {
         detections = []; laneSegments = []; laneFrameCounter = 0
         warningDebouncer.reset(); warningFeedback.reset()
         risk = .init(level: .clear, object: nil)
-        inferenceActive = false; inferenceMilliseconds = 0; frameAgeMilliseconds = 0; replacedFrames = 0
+        inferenceActive = false; inferenceError = nil; inferenceMilliseconds = 0; frameAgeMilliseconds = 0; replacedFrames = 0
     }
 }
