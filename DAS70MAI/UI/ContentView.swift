@@ -7,16 +7,14 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            VStack(spacing: 16) {
+            VStack(spacing: 12) {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("DAS70MAI").font(.title2.bold())
-                        Text(selection == .a500s ? "70mai A500S · \(a500sStatus)" : "iPhone Rear · Test")
-                            .font(.caption).foregroundStyle(.secondary)
+                        Text(selection == .a500s ? "70mai A500S · \(a500sStatus)" : "iPhone Rear · Test").font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Text(riskText).font(.caption.bold()).padding(.horizontal, 10).padding(.vertical, 6)
-                        .background(riskColor.opacity(0.85)).clipShape(Capsule())
+                    Text(riskText).font(.caption.bold()).padding(.horizontal, 10).padding(.vertical, 6).background(riskColor.opacity(0.85)).clipShape(Capsule())
                 }
 
                 ZStack {
@@ -26,11 +24,7 @@ struct ContentView: View {
                     } else if let frame = adas.a500sFrame {
                         Image(decorative: frame, scale: 1).resizable().scaledToFill().clipShape(RoundedRectangle(cornerRadius: 18))
                     } else {
-                        VStack(spacing: 10) {
-                            ProgressView().tint(.white)
-                            Text("70mai A500S").font(.headline)
-                            Text(a500sStatus).font(.caption).foregroundStyle(.secondary)
-                        }
+                        VStack(spacing: 10) { ProgressView().tint(.white); Text("70mai A500S").font(.headline); Text(a500sStatus).font(.caption).foregroundStyle(.secondary) }
                     }
                     LaneGuideOverlay().clipShape(RoundedRectangle(cornerRadius: 18))
                     LaneDetectionOverlay(segments: adas.laneSegments).clipShape(RoundedRectangle(cornerRadius: 18))
@@ -43,20 +37,21 @@ struct ContentView: View {
                     Text(String(format: "%.0f ms · age %.0f ms · drop %llu", adas.inferenceMilliseconds, adas.frameAgeMilliseconds, adas.replacedFrames))
                 }.font(.caption).foregroundStyle(.secondary)
 
+                HStack(spacing: 16) {
+                    Toggle(isOn: $adas.soundEnabled) { Label("Sound", systemImage: adas.soundEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill") }.toggleStyle(.switch)
+                    Toggle(isOn: $adas.vibrationEnabled) { Label("Vibration", systemImage: "iphone.radiowaves.left.and.right") }.toggleStyle(.switch)
+                }.font(.caption)
+
                 CameraSourcePicker(selection: $selection)
             }.padding().foregroundStyle(.white)
         }
         .preferredColorScheme(.dark)
         .onAppear { if selection == .iPhoneRearCamera { adas.startRearCamera() } else { adas.startA500S() } }
-        .onChange(of: selection) { newValue in
-            if newValue == .iPhoneRearCamera { adas.startRearCamera() } else { adas.startA500S() }
-        }
+        .onChange(of: selection) { newValue in if newValue == .iPhoneRearCamera { adas.startRearCamera() } else { adas.startA500S() } }
         .onDisappear { adas.stopRearCamera(); adas.stopA500S() }
     }
 
-    private var a500sStatus: String {
-        switch adas.a500sState { case .idle: "idle"; case .connecting: "connecting RTSP"; case .streaming: "RTSP connected"; case .failed(let message): "stream error: \(message)" }
-    }
+    private var a500sStatus: String { switch adas.a500sState { case .idle: "idle"; case .connecting: "connecting RTSP"; case .streaming: "RTSP connected"; case .failed(let message): "stream error: \(message)" } }
     private var riskText: String { switch adas.risk.level { case .clear: "CLEAR"; case .caution: "CAUTION"; case .warning: "WARNING" } }
     private var riskColor: Color { switch adas.risk.level { case .clear: .green; case .caution: .orange; case .warning: .red } }
 }
