@@ -24,10 +24,14 @@ actor ADASPipeline {
     private let frames = LatestFrameStore()
     private let engine: ADASInferenceEngine
     private var workerRunning = false
-    var onResult: (@Sendable (ADASFrameResult) -> Void)?
+    private var onResult: (@Sendable (ADASFrameResult) -> Void)?
 
     init(engine: ADASInferenceEngine) {
         self.engine = engine
+    }
+
+    func setResultHandler(_ handler: @escaping @Sendable (ADASFrameResult) -> Void) {
+        onResult = handler
     }
 
     func submit(_ frame: VideoFrame) async {
