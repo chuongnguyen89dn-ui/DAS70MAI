@@ -67,3 +67,14 @@ Trang thai: IMPLEMENTED, PARTLY BUILD-VERIFIED
 - Fix den khi CI xanh voi full YOLO/UI chain.
 - Sau CI xanh, them metrics inference/frame-age va canh bao audio/haptic co debounce.
 - Sau do tich hop A500S RTSP vao cung VideoSource/CVPixelBuffer pipeline; khong thay doi source tu dong.
+
+## 2026-09-17 — Full YOLO/UI chain build xanh + model URL duoc upstream xac nhan
+
+Trang thai: BUILD-VERIFIED, RUNTIME NOT VERIFIED
+
+- VERIFIED: GitHub Actions iOS Build run #20 thanh cong tren commit `f68b996`, sau khi bo actor isolation khoi `CVPixelBuffer` inference boundary.
+- VERIFIED upstream: UltralyticsYOLO README hien tai chinh thuc dung URL `https://github.com/ultralytics/yolo-ios-app/releases/download/v8.3.0/yolo26n.mlpackage.zip` cho official hosted Core ML model; URL trong DAS70MAI khong con la gia dinh tu doan.
+- VERIFIED upstream: package co san `YOLOCamera`/`YOLOView` cho realtime camera, ho tro cameraPosition `.back`; DAS70MAI van giu common custom CVPixelBuffer pipeline de cung mot inference path co the nhan ca iPhone Rear va A500S.
+- Upstream package/release license: AGPL-3.0; neu phat hanh thuong mai can xu ly licensing phu hop, khong coi la permissive dependency.
+- CHUA VERIFIED runtime: model tai/cache thanh cong tren iPhone, detections thuc, overlay alignment, FPS/frame-age/thermal.
+- Uu tien tiep: runtime observability + warning debounce; sau do A500S RTSP adapter vao cung pipeline, khong auto switch source.
