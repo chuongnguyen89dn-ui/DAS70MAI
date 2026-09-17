@@ -2,7 +2,8 @@ import Foundation
 import UIKit
 import VLCKit
 
-/// A500S transport: xADAS preview initialization followed by the VLC RTSP path.
+/// A500S transport: 70mai preview initialization followed by the proven VLC path.
+/// Only endpoints physically verified on the user's A500S are used.
 final class A500SRTSPSource: NSObject, @unchecked Sendable, VLCMediaPlayerDelegate {
     enum State: Sendable, Equatable { case idle, connecting, streaming, failed(String) }
     var onStateChanged: (@Sendable (State) -> Void)?
@@ -22,7 +23,9 @@ final class A500SRTSPSource: NSObject, @unchecked Sendable, VLCMediaPlayerDelega
     private var consecutiveFailures = 0
     private let frameQueue = DispatchQueue(label: "das70mai.a500s.frame", qos: .userInitiated)
     private let host = "192.168.0.1"
-    private let streamURL = "rtsp://192.168.0.1/00000000"
+    private let streamURLs = ["rtsp://192.168.0.1", "rtsp://192.168.0.1/00000000"]
+    private var streamIndex = 0
+    private var lockedStreamIndex: Int?
 
     override init() {
         super.init()
@@ -35,6 +38,8 @@ final class A500SRTSPSource: NSObject, @unchecked Sendable, VLCMediaPlayerDelega
         stop()
         stoppedByOwner = false
         consecutiveFailures = 0
+        streamIndex = 0
+        lockedStreamIndex = nil
         onStateChanged?(.connecting)
         SeventyMaiPreviewSession.shared.prepare(host: host) { [weak self] in
             DispatchQueue.main.async { [weak self] in
@@ -48,6 +53,8 @@ final class A500SRTSPSource: NSObject, @unchecked Sendable, VLCMediaPlayerDelega
     private func startPlayer() {
         reconnectWorkItem?.cancel(); reconnectWorkItem = nil
         stopSnapshotLoop(); onStateChanged?(.connecting); player.stop()
+        let selectedIndex = lockedStreamIndex ?? streamIndex
+        let streamURL = streamURLs[selectedIndex]
         guard let url = URL(string: streamURL), let media = VLCMedia(url: url) else { onStateChanged?(.failed("invalid A500S RTSP URL")); return }
         media.addOption(":network-caching=180")
         media.addOption(":live-caching=180")
@@ -81,7 +88,7 @@ final class A500SRTSPSource: NSObject, @unchecked Sendable, VLCMediaPlayerDelega
         switch newState {
         case .opening: onStateChanged?(.connecting)
         case .playing:
-            consecutiveFailures = 0; lastFrameAt = ProcessInfo.processInfo.systemUptime; startSnapshotLoop()
+            lastFrameAt = ProcessInfo.processInfo.systemUptime; startSnapshotLoop()
         case .error: stopSnapshotLoop(); scheduleReconnect(reason: "VLC RTSP error")
         case .stopped: stopSnapshotLoop(); if !stoppedByOwner { scheduleReconnect(reason: "VLC RTSP stopped") }
         default: break
@@ -91,8 +98,10 @@ final class A500SRTSPSource: NSObject, @unchecked Sendable, VLCMediaPlayerDelega
     private func scheduleReconnect(reason: String) {
         guard reconnectWorkItem == nil, !stoppedByOwner else { return }
         consecutiveFailures += 1
-        let delay = min(5.0, 0.8 + Double(consecutiveFailures - 1) * 0.8)
-        onStateChanged?(.failed("\(reason); retry \(String(format: "%.1f", delay))s"))
+        if lockedStreamIndex == nil { streamIndex = (streamIndex + 1) % streamURLs.count }
+        let delay = min(3.0, 0.5 + Double(consecutiveFailures - 1) * 0.5)
+        let endpoint = streamURLs[lockedStreamIndex ?? streamIndex]
+        onStateChanged?(.failed("\(reason); trying \(endpoint)"))
         let item = DispatchWorkItem { [weak self] in
             guard let self, !self.stoppedByOwner else { return }
             self.reconnectWorkItem = nil
@@ -130,6 +139,8 @@ final class A500SRTSPSource: NSObject, @unchecked Sendable, VLCMediaPlayerDelega
     @objc private func snapshotTaken(_ notification: Notification) {
         guard let path = snapshotPath else { snapshotInFlight = false; return }
         snapshotInFlight = false; snapshotPath = nil; frameProcessing = true; lastFrameAt = ProcessInfo.processInfo.systemUptime
+        if lockedStreamIndex == nil { lockedStreamIndex = streamIndex }
+        consecutiveFailures = 0
         onStateChanged?(.streaming)
         frameQueue.async { [weak self] in
             guard let self, let image = UIImage(contentsOfFile: path), let cgImage = image.cgImage, let pixelBuffer = Self.makePixelBuffer(from: cgImage) else {
