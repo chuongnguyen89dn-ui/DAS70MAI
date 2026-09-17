@@ -89,3 +89,17 @@ Trang thai: BUILD-VERIFIED TO #36; NEW FEEDBACK IMPLEMENTED, NOT YET VERIFIED
 - Reset feedback khi dung/chuyen source; khong thay doi manual source policy va khong auto fallback.
 - CI moi da duoc trigger sau thay doi feedback; chua danh dau BUILD-VERIFIED cho thay doi nay cho den khi run xanh.
 - Blocker vat ly van con: iPhone 14 Pro runtime (rear preview/model/detection/overlay/thermal) va A500S that (RTSP compatibility + end-to-end latency).
+
+## 2026-09-17 — Physical rear test + bundled YOLO recovery
+
+Trang thai: REAR CAMERA RUNTIME VERIFIED; YOLO/LANE RUNTIME NOT VERIFIED
+
+- VERIFIED tren iPhone vat ly tu anh test nguoi dung: app launch, UI va `iPhone Rear` live preview hoat dong; static yellow `LANE GUIDE` hien dung.
+- Anh test Build #46 cho thay `YOLO loading`, `lanes 0`, inference/age = 0 ms: day la bang chung YOLO runtime chua chay va lane detector chua cho ket qua; khong danh dau hai muc nay VERIFIED.
+- Da them Sound va Vibration toggle rieng, mac dinh bat, de nguoi dung chu dong tat/mo feedback.
+- Build #50 VERIFIED CI success: workflow tai official yolo26n mlpackage, dua model vao app va fail build neu khong tim thay model trong device .app.
+- Da doi `UltralyticsDetectionEngine` khoi remote URL sang dung upstream Ultralytics 8.9.4 bundled-model API `YOLO("yolo26n", task: .detect, ...)`; upstream resolver tim `yolo26n.mlmodelc` roi `.mlpackage` trong Bundle.main.
+- Build #51 VERIFIED CI success tren commit `5dba96e` voi local bundled model loading path.
+- Da them inference error propagation tu ADASPipeline -> ViewModel -> UI. Lan test tiep UI se hien `YOLO READY` khi co inference result hoac `YOLO ERROR · <detail>` neu model/runtime that bai, thay vi treo `YOLO loading` vo han.
+- CHUA VERIFIED tren device: local yolo26n load thanh cong, real detection boxes, latency, lane candidates, warning trigger.
+- Blocker A500S van la camera vat ly: RTSP compatibility va end-to-end latency chua co runtime evidence.
