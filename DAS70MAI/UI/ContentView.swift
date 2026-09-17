@@ -22,11 +22,9 @@ struct ContentView: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: 18).fill(Color.white.opacity(0.06))
                     if selection == .iPhoneRearCamera {
-                        RearCameraPreview(session: adas.rearCamera.session)
-                            .clipShape(RoundedRectangle(cornerRadius: 18))
+                        RearCameraPreview(session: adas.rearCamera.session).clipShape(RoundedRectangle(cornerRadius: 18))
                     } else if let frame = adas.a500sFrame {
-                        Image(decorative: frame, scale: 1).resizable().scaledToFill()
-                            .clipShape(RoundedRectangle(cornerRadius: 18))
+                        Image(decorative: frame, scale: 1).resizable().scaledToFill().clipShape(RoundedRectangle(cornerRadius: 18))
                     } else {
                         VStack(spacing: 10) {
                             ProgressView().tint(.white)
@@ -34,14 +32,13 @@ struct ContentView: View {
                             Text(a500sStatus).font(.caption).foregroundStyle(.secondary)
                         }
                     }
-                    LaneGuideOverlay()
-                        .clipShape(RoundedRectangle(cornerRadius: 18))
-                    DetectionOverlay(detections: adas.detections)
-                        .clipShape(RoundedRectangle(cornerRadius: 18))
+                    LaneGuideOverlay().clipShape(RoundedRectangle(cornerRadius: 18))
+                    LaneDetectionOverlay(segments: adas.laneSegments).clipShape(RoundedRectangle(cornerRadius: 18))
+                    DetectionOverlay(detections: adas.detections).clipShape(RoundedRectangle(cornerRadius: 18))
                 }.frame(maxHeight: .infinity).clipped()
 
                 HStack {
-                    Text(adas.inferenceActive ? "YOLO active · \(adas.detections.count) objects" : "YOLO loading")
+                    Text(adas.inferenceActive ? "YOLO · \(adas.detections.count) objects · lanes \(adas.laneSegments.count)" : "YOLO loading · lanes \(adas.laneSegments.count)")
                     Spacer()
                     Text(String(format: "%.0f ms · age %.0f ms · drop %llu", adas.inferenceMilliseconds, adas.frameAgeMilliseconds, adas.replacedFrames))
                 }.font(.caption).foregroundStyle(.secondary)
@@ -58,17 +55,8 @@ struct ContentView: View {
     }
 
     private var a500sStatus: String {
-        switch adas.a500sState {
-        case .idle: "idle"
-        case .connecting: "connecting RTSP"
-        case .streaming: "RTSP connected"
-        case .failed(let message): "stream error: \(message)"
-        }
+        switch adas.a500sState { case .idle: "idle"; case .connecting: "connecting RTSP"; case .streaming: "RTSP connected"; case .failed(let message): "stream error: \(message)" }
     }
-    private var riskText: String {
-        switch adas.risk.level { case .clear: "CLEAR"; case .caution: "CAUTION"; case .warning: "WARNING" }
-    }
-    private var riskColor: Color {
-        switch adas.risk.level { case .clear: .green; case .caution: .orange; case .warning: .red }
-    }
+    private var riskText: String { switch adas.risk.level { case .clear: "CLEAR"; case .caution: "CAUTION"; case .warning: "WARNING" } }
+    private var riskColor: Color { switch adas.risk.level { case .clear: .green; case .caution: .orange; case .warning: .red } }
 }
