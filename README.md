@@ -4,11 +4,12 @@ iPhone ADAS companion designed around a 70mai A500S dashcam.
 
 ## Camera policy
 
-1. Prefer the 70mai A500S RTSP/RTP stream whenever it is available.
-2. If A500S is unavailable, automatically fall back to the **rear iPhone camera only**.
-3. Never use the front/selfie camera.
-4. Both sources feed the same `CVPixelBuffer -> AI -> ADAS` pipeline.
-5. When A500S becomes available again, switch back to it.
+The camera is selected manually in the app:
+
+- **70mai A500S** — production/vehicle camera source via its stream.
+- **iPhone Rear** — development/test source when the A500S is not physically available.
+
+There is no automatic fallback or automatic reconnect switching. Losing or regaining the A500S connection does not change the selected source. The front/selfie camera is never used. Both sources feed the same `CVPixelBuffer -> AI -> ADAS` pipeline so ADAS can be developed and tested with the rear iPhone camera before testing against the A500S.
 
 ## Low-latency policy
 
@@ -16,4 +17,4 @@ The AI pipeline is latest-frame-wins. Stale frames are replaced instead of queue
 
 ## Status
 
-Dual-source source/coordinator and native rear-camera source are IMPLEMENTED, NOT VERIFIED. A500S RTSP integration, Core ML AI integration and full iPhone build are still pending verification.
+Manual source selector, common video boundary, rear-camera capture and common latest-frame inference pipeline are IMPLEMENTED, NOT VERIFIED. A500S RTSP integration, concrete Core ML/YOLO inference and full iPhone build remain pending verification.
