@@ -33,7 +33,9 @@ final class ADASViewModel: ObservableObject {
         rearCamera.onFrame = { [weak self] frame in
             guard let self else { return }
             Task { await self.pipeline.submit(frame) }
-            self.detectLanesIfNeeded(frame, source: .iPhoneRearCamera)
+            Task { @MainActor [weak self] in
+                self?.detectLanesIfNeeded(frame, source: .iPhoneRearCamera)
+            }
         }
         a500s.onStateChanged = { [weak self] state in
             Task { @MainActor [weak self] in self?.a500sState = state }
@@ -42,7 +44,9 @@ final class ADASViewModel: ObservableObject {
             guard let self else { return }
             let frame = VideoFrame(pixelBuffer: pixelBuffer, source: .a500s, receivedAt: .now)
             Task { await self.pipeline.submit(frame) }
-            self.detectLanesIfNeeded(frame, source: .a500s)
+            Task { @MainActor [weak self] in
+                self?.detectLanesIfNeeded(frame, source: .a500s)
+            }
             let image = CIImage(cvPixelBuffer: pixelBuffer)
             let context = CIContext(options: [.cacheIntermediates: false])
             if let preview = context.createCGImage(image, from: image.extent) {
