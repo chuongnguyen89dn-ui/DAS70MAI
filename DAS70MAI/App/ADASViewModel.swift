@@ -20,6 +20,7 @@ final class ADASViewModel: ObservableObject {
     private let engine = UltralyticsDetectionEngine()
     private lazy var pipeline = ADASPipeline(engine: engine)
     private var warningDebouncer = WarningDebouncer()
+    private let warningFeedback = WarningFeedbackController()
 
     init() {
         rearCamera.onFrame = { [weak self] frame in
@@ -37,15 +38,10 @@ final class ADASViewModel: ObservableObject {
             let frame = VideoFrame(pixelBuffer: pixelBuffer, source: .a500s, receivedAt: .now)
             Task { await self.pipeline.submit(frame) }
 
-            // Render the preview into an immutable CGImage before crossing to MainActor.
-            // CVPixelBuffer is mutable/non-Sendable and Swift 6 correctly rejects sending it
-            // from the VideoToolbox decoder callback into the UI actor.
             let image = CIImage(cvPixelBuffer: pixelBuffer)
             let context = CIContext(options: [.cacheIntermediates: false])
             if let preview = context.createCGImage(image, from: image.extent) {
-                Task { @MainActor [weak self] in
-                    self?.a500sFrame = preview
-                }
+                Task { @MainActor [weak self] in self?.a500sFrame = preview }
             }
         }
         Task {
@@ -57,6 +53,7 @@ final class ADASViewModel: ObservableObject {
                     let rawRisk = ForwardRiskEvaluator.evaluate(relevant)
                     let stableLevel = self.warningDebouncer.update(with: rawRisk)
                     self.risk = ForwardRisk(level: stableLevel, object: rawRisk.object)
+                    self.warningFeedback.update(level: stableLevel)
                     self.inferenceMilliseconds = metrics.inferenceMilliseconds
                     self.frameAgeMilliseconds = metrics.frameAgeMilliseconds
                     self.replacedFrames = metrics.replacedFrames
@@ -92,6 +89,7 @@ final class ADASViewModel: ObservableObject {
     private func resetRuntime() {
         detections = []
         warningDebouncer.reset()
+        warningFeedback.reset()
         risk = .init(level: .clear, object: nil)
         inferenceActive = false
         inferenceMilliseconds = 0
