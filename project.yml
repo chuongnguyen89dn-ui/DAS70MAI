@@ -13,9 +13,9 @@ packages:
   UltralyticsYOLO:
     url: https://github.com/ultralytics/yolo-ios-app.git
     from: 8.9.4
-  IPCamKit:
-    url: https://github.com/steelbrain/IPCamKit.git
-    from: 0.3.1
+  VLCKit:
+    url: https://github.com/videolan/vlckit.git
+    branch: master
 targets:
   DAS70MAI:
     type: application
@@ -26,8 +26,8 @@ targets:
     dependencies:
       - package: UltralyticsYOLO
         product: UltralyticsYOLO
-      - package: IPCamKit
-        product: IPCamKit
+      - package: VLCKit
+        product: VLCKit
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.das70mai.app
