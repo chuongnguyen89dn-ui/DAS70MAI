@@ -14,6 +14,8 @@ final class ADASViewModel: ObservableObject {
     @Published var replacedFrames: UInt64 = 0
     @Published var a500sState: A500SRTSPSource.State = .idle
     @Published var a500sFrame: CGImage?
+    @Published var soundEnabled = true { didSet { warningFeedback.soundEnabled = soundEnabled } }
+    @Published var vibrationEnabled = true { didSet { warningFeedback.vibrationEnabled = vibrationEnabled } }
 
     let rearCamera = RearCameraSource()
     private let a500s = A500SRTSPSource()
@@ -31,9 +33,7 @@ final class ADASViewModel: ObservableObject {
             Task { await self.pipeline.submit(frame) }
             self.detectLanesIfNeeded(frame.pixelBuffer)
         }
-        a500s.onStateChanged = { [weak self] state in
-            Task { @MainActor [weak self] in self?.a500sState = state }
-        }
+        a500s.onStateChanged = { [weak self] state in Task { @MainActor [weak self] in self?.a500sState = state } }
         a500s.onH264AccessUnit = { [weak self] nalus, _, _ in self?.a500sDecoder.decode(nalus: nalus) }
         a500sDecoder.onPixelBuffer = { [weak self] pixelBuffer in
             guard let self else { return }
@@ -42,9 +42,7 @@ final class ADASViewModel: ObservableObject {
             self.detectLanesIfNeeded(pixelBuffer)
             let image = CIImage(cvPixelBuffer: pixelBuffer)
             let context = CIContext(options: [.cacheIntermediates: false])
-            if let preview = context.createCGImage(image, from: image.extent) {
-                Task { @MainActor [weak self] in self?.a500sFrame = preview }
-            }
+            if let preview = context.createCGImage(image, from: image.extent) { Task { @MainActor [weak self] in self?.a500sFrame = preview } }
         }
         Task {
             await pipeline.setResultHandler { [weak self] result, metrics in
@@ -81,15 +79,9 @@ final class ADASViewModel: ObservableObject {
     func stopA500S() { a500s.stop(); a500sDecoder.reset(); a500sFrame = nil; resetRuntime() }
 
     private func resetRuntime() {
-        detections = []
-        laneSegments = []
-        laneFrameCounter = 0
-        warningDebouncer.reset()
-        warningFeedback.reset()
+        detections = []; laneSegments = []; laneFrameCounter = 0
+        warningDebouncer.reset(); warningFeedback.reset()
         risk = .init(level: .clear, object: nil)
-        inferenceActive = false
-        inferenceMilliseconds = 0
-        frameAgeMilliseconds = 0
-        replacedFrames = 0
+        inferenceActive = false; inferenceMilliseconds = 0; frameAgeMilliseconds = 0; replacedFrames = 0
     }
 }
