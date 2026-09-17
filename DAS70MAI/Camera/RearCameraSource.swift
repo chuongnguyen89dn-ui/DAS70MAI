@@ -7,16 +7,33 @@ final class RearCameraSource: NSObject, VideoSource, AVCaptureVideoDataOutputSam
     var onFrame: (@Sendable (VideoFrame) -> Void)?
     var onAvailabilityChanged: (@Sendable (Bool) -> Void)?
 
-    private let session = AVCaptureSession()
+    let session = AVCaptureSession()
     private let queue = DispatchQueue(label: "DAS70MAI.rear-camera", qos: .userInteractive)
     private var configured = false
 
     func start() {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            startAuthorized()
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
+                guard granted else {
+                    self?.onAvailabilityChanged?(false)
+                    return
+                }
+                self?.startAuthorized()
+            }
+        default:
+            onAvailabilityChanged?(false)
+        }
+    }
+
+    private func startAuthorized() {
         queue.async { [weak self] in
             guard let self else { return }
             do {
                 if !configured { try configure() }
-                session.startRunning()
+                if !session.isRunning { session.startRunning() }
                 onAvailabilityChanged?(true)
             } catch {
                 onAvailabilityChanged?(false)
@@ -25,7 +42,10 @@ final class RearCameraSource: NSObject, VideoSource, AVCaptureVideoDataOutputSam
     }
 
     func stop() {
-        queue.async { [weak self] in self?.session.stopRunning() }
+        queue.async { [weak self] in
+            guard let self, session.isRunning else { return }
+            session.stopRunning()
+        }
     }
 
     private func configure() throws {
