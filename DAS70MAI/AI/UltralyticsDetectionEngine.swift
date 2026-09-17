@@ -3,7 +3,10 @@ import CoreVideo
 import Foundation
 import UltralyticsYOLO
 
-actor UltralyticsDetectionEngine: ADASInferenceEngine {
+/// YOLO inference stays non-actor-isolated because CVPixelBuffer is a reference-backed
+/// Core Video type that is intentionally not Sendable under Swift 6 strict concurrency.
+/// ADASPipeline already serializes inference and keeps only the latest frame.
+final class UltralyticsDetectionEngine: @unchecked Sendable, ADASInferenceEngine {
     private var model: YOLO?
     private var loadingTask: Task<YOLO, Error>?
 
