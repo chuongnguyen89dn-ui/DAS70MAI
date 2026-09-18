@@ -145,6 +145,7 @@ final class RootlessRTSPPlayerView: UIView {
         renderLock.lock()
         guard !renderBusy else {
             renderLock.unlock()
+            frameProcessor.noteDASInputDrop()
             return
         }
         renderBusy = true
@@ -194,6 +195,7 @@ final class RootlessRTSPPlayerView: UIView {
         aiLock.lock()
         guard !aiBusy else {
             aiLock.unlock()
+            frameProcessor.noteDASInputDrop()
             return
         }
         aiBusy = true
