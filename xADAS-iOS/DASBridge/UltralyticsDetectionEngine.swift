@@ -11,6 +11,8 @@ final class UltralyticsDetectionEngine: @unchecked Sendable {
     private var loadingModel: YOLO?
     private var loadingTask: Task<YOLO, Error>?
     private var busy = false
+    @MainActor private(set) var latestDetections: [ADASDetection] = []
+    @MainActor private(set) var inferenceMilliseconds: Double = 0
 
     func submit(pixelBuffer: CVPixelBuffer) {
         guard !busy else { return }
@@ -18,7 +20,14 @@ final class UltralyticsDetectionEngine: @unchecked Sendable {
         Task { [weak self] in
             guard let self else { return }
             defer { self.busy = false }
-            _ = try? await self.infer(pixelBuffer: pixelBuffer)
+            let start = ProcessInfo.processInfo.systemUptime
+            if let detections = try? await self.infer(pixelBuffer: pixelBuffer) {
+                let ms = (ProcessInfo.processInfo.systemUptime - start) * 1000
+                await MainActor.run {
+                    self.latestDetections = detections
+                    self.inferenceMilliseconds = ms
+                }
+            }
         }
     }
 
