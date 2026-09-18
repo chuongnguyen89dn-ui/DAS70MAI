@@ -19,6 +19,8 @@ targets:
     platform: iOS
     sources:
       - path: xADAS-iOS
+        excludes:
+          - Camera/SeventyMaiPlayerView.swift
     dependencies:
       - package: ONNXRuntime
         product: onnxruntime
