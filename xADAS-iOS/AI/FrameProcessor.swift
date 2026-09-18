@@ -2,6 +2,8 @@ import AVFoundation
 import Combine
 import CoreMedia
 import CoreVideo
+import CoreImage
+import UltralyticsYOLO
 
 final class FrameProcessor: ObservableObject {
     @Published private(set) var processedFrames: UInt64 = 0
@@ -29,7 +31,9 @@ final class FrameProcessor: ObservableObject {
     private var laneFrameCounter = 1
     private var lastVehicleSeenAt: TimeInterval = 0
     private var lastLaneSeenAt: TimeInterval = 0
+    // Preserve Ivy detector for the existing HUD while DAS YOLO is transplanted in parallel.
     private let detector: VehicleDetector?
+    private let dasYOLO = UltralyticsDetectionEngine()
     private let distanceEstimator = DistanceEstimator()
     private let leadDistanceTracker = LeadDistanceTracker()
     private let laneDetector: LaneAIDetector?
@@ -73,6 +77,8 @@ final class FrameProcessor: ObservableObject {
 
     func process(pixelBuffer: CVPixelBuffer, timestamp: TimeInterval = ProcessInfo.processInfo.systemUptime) {
         totalFrames &+= 1
+        // DAS YOLO runs off the decoded pixel buffer only; camera/RTSP/render lifecycle is untouched.
+        dasYOLO.submit(pixelBuffer: pixelBuffer)
         inferenceFrameCounter &+= 1
         laneFrameCounter &+= 1
         let stride = adaptiveStride
