@@ -30,7 +30,7 @@ struct DriveView: View {
                         }
                     }
                     LaneGuideOverlay().clipShape(RoundedRectangle(cornerRadius: 18))
-                    DASLaneDetectionOverlay(segments: activeProcessor.dasLaneSegments).clipShape(RoundedRectangle(cornerRadius: 18))
+                    DASLaneDetectionOverlay(detection: activeProcessor.dasLaneDetection).clipShape(RoundedRectangle(cornerRadius: 18))
                     DASDetectionOverlay(detections: activeProcessor.dasDetections).clipShape(RoundedRectangle(cornerRadius: 18))
                 }
                 .frame(maxHeight: .infinity).clipped()
@@ -120,8 +120,17 @@ private struct DASDetectionOverlay: View {
 }
 
 private struct DASLaneDetectionOverlay: View {
-    let segments: [LaneSegment]
-    var body: some View { GeometryReader { g in Path { p in for s in segments { p.move(to: CGPoint(x:s.start.x*g.size.width,y:s.start.y*g.size.height)); p.addLine(to: CGPoint(x:s.end.x*g.size.width,y:s.end.y*g.size.height)) } }.stroke(.cyan, style: StrokeStyle(lineWidth:4,lineCap:.round)) }.allowsHitTesting(false) }
+    let detection: LaneDetection?
+    var body: some View {
+        GeometryReader { g in
+            if let d = detection {
+                Path { p in
+                    if let first = d.leftPoints.first { p.move(to: CGPoint(x:first.x*g.size.width,y:first.y*g.size.height)); for q in d.leftPoints.dropFirst(){ p.addLine(to: CGPoint(x:q.x*g.size.width,y:q.y*g.size.height)) } }
+                    if let first = d.rightPoints.first { p.move(to: CGPoint(x:first.x*g.size.width,y:first.y*g.size.height)); for q in d.rightPoints.dropFirst(){ p.addLine(to: CGPoint(x:q.x*g.size.width,y:q.y*g.size.height)) } }
+                }.stroke(.cyan, style: StrokeStyle(lineWidth:4,lineCap:.round))
+            }
+        }.allowsHitTesting(false)
+    }
 }
 
 private struct LaneGuideOverlay: View {
