@@ -21,16 +21,16 @@ jobs:
         run: xcodebuild -project xADAS-iOS.xcodeproj -scheme xADAS-iOS -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/xADAS-Device" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
       - name: Package unsigned IPA
         run: |
-          APP="$RUNNER_TEMP/xADAS-Device/Build/Products/Release-iphoneos/Ivy.app"
+          APP="$RUNNER_TEMP/xADAS-Device/Build/Products/Release-iphoneos/DAS70MAI.app"
           test -d "$APP"
           mkdir -p "$RUNNER_TEMP/ipa/Payload"
           cp -R "$APP" "$RUNNER_TEMP/ipa/Payload/"
           cd "$RUNNER_TEMP/ipa"
-          /usr/bin/zip -qry "$GITHUB_WORKSPACE/Ivy-xADAS-A500S.ipa" Payload
+          /usr/bin/zip -qry "$GITHUB_WORKSPACE/DAS70MAI-A500S.ipa" Payload
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Ivy-xADAS-A500S-ipa
-          path: Ivy-xADAS-A500S.ipa
+          name: DAS70MAI-A500S-ipa
+          path: DAS70MAI-A500S.ipa
           if-no-files-found: error
           retention-days: 7
