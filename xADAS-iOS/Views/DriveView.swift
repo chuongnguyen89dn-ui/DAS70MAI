@@ -42,7 +42,7 @@ struct DriveView: View {
             }.padding().foregroundStyle(.white)
         }
         .preferredColorScheme(.dark)
-        .onAppear { configureSource(); applyFeedback() }
+        .onAppear { a500sProcessor.dasRotate180 = true; cameraManager.frameProcessor.dasRotate180 = false; configureSource(); applyFeedback() }
         .onChange(of: cameraSourceRaw) { _ in configureSource() }
         .onChange(of: soundEnabled) { _ in applyFeedback() }
         .onChange(of: vibrationEnabled) { _ in applyFeedback() }
@@ -136,11 +136,7 @@ private struct DASDetectionOverlay: View {
         let scaled=CGSize(width:image.width*s,height:image.height*s)
         let ox=(scaled.width-view.width)/2, oy=(scaled.height-view.height)/2
         // A500S inference image is rotated 180 degrees together with the display.
-        let rr=selectedRectForCorrectedOrientation(r)
-        return CGRect(x:rr.minX*image.width*s-ox,y:rr.minY*image.height*s-oy,width:rr.width*image.width*s,height:rr.height*image.height*s)
-    }
-    private func selectedRectForCorrectedOrientation(_ r:CGRect)->CGRect {
-        CGRect(x:1-r.maxX,y:1-r.maxY,width:r.width,height:r.height)
+        return CGRect(x:r.minX*image.width*s-ox,y:r.minY*image.height*s-oy,width:r.width*image.width*s,height:r.height*image.height*s)
     }
 }
 
