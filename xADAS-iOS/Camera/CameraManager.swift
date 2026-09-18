@@ -19,8 +19,6 @@ final class CameraManager: NSObject, ObservableObject {
     private var wantsToRun = false
     private var frameCounter = 0
     private var fpsWindowStart = ProcessInfo.processInfo.systemUptime
-    private var rotationCoordinator: AnyObject?
-    private var rotationObservation: NSKeyValueObservation?
 
     override init() {
         super.init()
@@ -106,25 +104,15 @@ final class CameraManager: NSObject, ObservableObject {
         guard session.canAddOutput(videoOutput) else { throw CameraError.cannotAddOutput }
         session.addOutput(videoOutput)
 
+        // One stable landscape coordinate space for AI. CameraPreview owns
+        // physical display rotation, so capture and preview cannot fight each other.
         if let connection = videoOutput.connection(with: .video) {
             if #available(iOS 17.0, *) {
-                let coordinator = AVCaptureDevice.RotationCoordinator(device: camera, previewLayer: nil)
-                rotationCoordinator = coordinator
-                applyCaptureRotation(coordinator.videoRotationAngleForHorizonLevelCapture, to: connection)
-                rotationObservation = coordinator.observe(\.videoRotationAngleForHorizonLevelCapture, options: [.initial, .new]) { [weak self, weak connection] coordinator, _ in
-                    guard let self, let connection else { return }
-                    self.sessionQueue.async { self.applyCaptureRotation(coordinator.videoRotationAngleForHorizonLevelCapture, to: connection) }
-                }
+                if connection.isVideoRotationAngleSupported(0) { connection.videoRotationAngle = 0 }
             } else if connection.isVideoOrientationSupported {
-                connection.videoOrientation = .portrait
+                connection.videoOrientation = .landscapeRight
             }
         }
-    }
-
-    @available(iOS 17.0, *)
-    private func applyCaptureRotation(_ angle: CGFloat, to connection: AVCaptureConnection) {
-        guard connection.isVideoRotationAngleSupported(angle) else { return }
-        connection.videoRotationAngle = angle
     }
 
     private func updateFPS() {
