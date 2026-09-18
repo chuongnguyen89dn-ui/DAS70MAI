@@ -31,8 +31,9 @@ jobs:
         run: |
           mkdir -p xADAS-iOS/Models
           python3 scripts/extract-ufldv2-model.py xADAS-iOS/Models/UFLDv2TuSimpleRes18Int8.onnx
-          python3 -m pip install --quiet --disable-pip-version-check onnx onnxruntime
-          python3 - <<'PY'
+          python3 -m venv "$RUNNER_TEMP/ufld-venv"
+          "$RUNNER_TEMP/ufld-venv/bin/python" -m pip install --quiet --disable-pip-version-check onnx onnxruntime
+          "$RUNNER_TEMP/ufld-venv/bin/python" - <<'PY'
           from onnxruntime.quantization import quantize_dynamic, QuantType
           src='xADAS-iOS/Models/UFLDv2TuSimpleRes18Int8.onnx'
           dst=src+'.quantized'
