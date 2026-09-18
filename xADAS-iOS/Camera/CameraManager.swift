@@ -19,6 +19,8 @@ final class CameraManager: NSObject, ObservableObject {
     private var wantsToRun = false
     private var frameCounter = 0
     private var fpsWindowStart = ProcessInfo.processInfo.systemUptime
+    @available(iOS 17.0, *) private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
+    @available(iOS 17.0, *) private var rotationObservation: NSKeyValueObservation?
 
     override init() {
         super.init()
@@ -106,11 +108,23 @@ final class CameraManager: NSObject, ObservableObject {
 
         if let connection = videoOutput.connection(with: .video) {
             if #available(iOS 17.0, *) {
-                if connection.isVideoRotationAngleSupported(90) { connection.videoRotationAngle = 90 }
+                let coordinator = AVCaptureDevice.RotationCoordinator(device: camera, previewLayer: nil)
+                rotationCoordinator = coordinator
+                applyCaptureRotation(coordinator.videoRotationAngleForHorizonLevelCapture, to: connection)
+                rotationObservation = coordinator.observe(\\.videoRotationAngleForHorizonLevelCapture, options: [.initial, .new]) { [weak self, weak connection] coordinator, _ in
+                    guard let self, let connection else { return }
+                    self.sessionQueue.async { self.applyCaptureRotation(coordinator.videoRotationAngleForHorizonLevelCapture, to: connection) }
+                }
             } else if connection.isVideoOrientationSupported {
                 connection.videoOrientation = .portrait
             }
         }
+    }
+
+    @available(iOS 17.0, *)
+    private func applyCaptureRotation(_ angle: CGFloat, to connection: AVCaptureConnection) {
+        guard connection.isVideoRotationAngleSupported(angle) else { return }
+        connection.videoRotationAngle = angle
     }
 
     private func updateFPS() {
