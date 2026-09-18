@@ -59,6 +59,7 @@ struct ADASOverlayView: View {
                 distanceCorridor(in: proxy.size)
                 ForEach(detections) { detection in detectionBox(detection, in: proxy.size) }
                 ForEach(dasDetections) { detection in dasDetectionBox(detection, in: proxy.size) }
+                if dasRisk.level != .clear { dasRiskBanner.position(x: proxy.size.width / 2, y: proxy.size.height * 0.16) }
 
                 gpsSpeedometer.position(x: 64, y: proxy.size.height - 72)
                 speedLimitBadge.position(x: 112, y: proxy.size.height - 111)
@@ -80,6 +81,13 @@ struct ADASOverlayView: View {
             .foregroundStyle(.white)
         }
         .allowsHitTesting(false)
+    }
+
+    private var dasRiskBanner: some View {
+        Text(dasRisk.level == .warning ? "FORWARD WARNING" : "CAUTION")
+            .font(.headline.monospaced().bold()).foregroundStyle(.white)
+            .padding(.horizontal, 16).padding(.vertical, 8)
+            .background(dasRisk.level == .warning ? Color.red.opacity(0.9) : Color.orange.opacity(0.9), in: RoundedRectangle(cornerRadius: 10))
     }
 
     private var gpsSpeedometer: some View {
