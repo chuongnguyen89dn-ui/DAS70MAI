@@ -111,7 +111,7 @@ final class CameraManager: NSObject, ObservableObject {
                 let coordinator = AVCaptureDevice.RotationCoordinator(device: camera, previewLayer: nil)
                 rotationCoordinator = coordinator
                 applyCaptureRotation(coordinator.videoRotationAngleForHorizonLevelCapture, to: connection)
-                rotationObservation = coordinator.observe(\\.videoRotationAngleForHorizonLevelCapture, options: [.initial, .new]) { [weak self, weak connection] coordinator, _ in
+                rotationObservation = coordinator.observe(\.videoRotationAngleForHorizonLevelCapture, options: [.initial, .new]) { [weak self, weak connection] coordinator, _ in
                     guard let self, let connection else { return }
                     self.sessionQueue.async { self.applyCaptureRotation(coordinator.videoRotationAngleForHorizonLevelCapture, to: connection) }
                 }
