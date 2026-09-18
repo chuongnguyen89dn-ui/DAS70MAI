@@ -48,6 +48,15 @@ jobs:
           APP="$RUNNER_TEMP/xADAS-Device/Build/Products/Release-iphoneos/DAS70MAI.app"
           find "$APP" -name 'UFLDv2TuSimpleRes18Int8.onnx' -print | tee "$RUNNER_TEMP/lane-bundle.txt"
           test -s "$RUNNER_TEMP/lane-bundle.txt"
+      - name: Audit final app payload
+        run: |
+          APP="$RUNNER_TEMP/xADAS-Device/Build/Products/Release-iphoneos/DAS70MAI.app"
+          echo '=== APP TOTAL ==='
+          du -sh "$APP"
+          echo '=== TOP PAYLOAD ==='
+          du -ah "$APP" | sort -hr | head -40
+          test -z "$(find "$APP" -iname '*vlc*' -print -quit)"
+          test -z "$(find "$APP" -iname '*IvyShare*' -print -quit)"
       - name: Package unsigned IPA
         run: |
           APP="$RUNNER_TEMP/xADAS-Device/Build/Products/Release-iphoneos/DAS70MAI.app"
