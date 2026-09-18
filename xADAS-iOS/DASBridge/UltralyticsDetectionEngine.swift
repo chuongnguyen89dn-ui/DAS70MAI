@@ -6,8 +6,7 @@ import UltralyticsYOLO
 
 /// Uses the same bundled-model loading path as the upstream Ultralytics iOS package.
 /// ADASPipeline serializes inference and keeps only the latest frame.
-@MainActor
-final class UltralyticsDetectionEngine {
+final class UltralyticsDetectionEngine: @unchecked Sendable {
     private var model: YOLO?
     private var loadingModel: YOLO?
     private var loadingTask: Task<YOLO, Error>?
@@ -18,7 +17,7 @@ final class UltralyticsDetectionEngine {
     func submit(pixelBuffer: CVPixelBuffer) {
         guard !busy else { return }
         busy = true
-        Task { @MainActor [weak self] in
+        Task { [weak self] in
             guard let self else { return }
             defer { self.busy = false }
             let start = ProcessInfo.processInfo.systemUptime
