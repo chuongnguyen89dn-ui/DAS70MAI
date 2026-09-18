@@ -16,21 +16,21 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
       - name: Build for iOS Simulator
-        run: xcodebuild -project DAS70MAI.xcodeproj -scheme DAS70MAI -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+        run: xcodebuild -project xADAS-iOS.xcodeproj -scheme xADAS-iOS -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
       - name: Build unsigned iPhone app
-        run: xcodebuild -project DAS70MAI.xcodeproj -scheme DAS70MAI -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/DAS70MAI-Device" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
+        run: xcodebuild -project xADAS-iOS.xcodeproj -scheme xADAS-iOS -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/xADAS-Device" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
       - name: Package unsigned IPA
         run: |
-          APP="$RUNNER_TEMP/DAS70MAI-Device/Build/Products/Release-iphoneos/DAS70MAI.app"
+          APP="$RUNNER_TEMP/xADAS-Device/Build/Products/Release-iphoneos/Ivy.app"
           test -d "$APP"
           mkdir -p "$RUNNER_TEMP/ipa/Payload"
           cp -R "$APP" "$RUNNER_TEMP/ipa/Payload/"
           cd "$RUNNER_TEMP/ipa"
-          /usr/bin/zip -qry "$GITHUB_WORKSPACE/DAS70MAI-A500S-connect.ipa" Payload
+          /usr/bin/zip -qry "$GITHUB_WORKSPACE/Ivy-xADAS-A500S.ipa" Payload
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
-          name: DAS70MAI-A500S-connect-ipa
-          path: DAS70MAI-A500S-connect.ipa
+          name: Ivy-xADAS-A500S-ipa
+          path: Ivy-xADAS-A500S.ipa
           if-no-files-found: error
           retention-days: 7
