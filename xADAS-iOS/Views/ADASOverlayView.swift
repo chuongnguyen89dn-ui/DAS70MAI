@@ -11,6 +11,8 @@ struct ADASOverlayView: View {
     let frameWidth: Int
     let frameHeight: Int
     let detections: [VehicleDetection]
+    let dasDetections: [ADASDetection]
+    let dasInferenceMS: Double
     let leadDistanceState: LeadDistanceState
     let horizonRatio: Double
     let laneDetection: LaneDetection?
@@ -39,7 +41,7 @@ struct ADASOverlayView: View {
                             }
                             // DAS70MAI phase 1: expose YOLO inference latency without touching
                             // the proven 70mai RTSP/decode/render path.
-                            Text(inferenceMS > 0 ? String(format: "YOLO %.1f ms", inferenceMS) : "YOLO READY")
+                            Text(dasInferenceMS > 0 ? String(format: "DAS YOLO %.1f ms", dasInferenceMS) : "DAS YOLO READY")
                                 .font(.caption2.monospaced().bold())
                                 .foregroundStyle(inferenceMS > 80 ? .orange : .green)
                         }
@@ -56,6 +58,7 @@ struct ADASOverlayView: View {
                 if let laneDetection { laneOverlay(laneDetection, in: proxy.size) }
                 distanceCorridor(in: proxy.size)
                 ForEach(detections) { detection in detectionBox(detection, in: proxy.size) }
+                ForEach(dasDetections) { detection in dasDetectionBox(detection, in: proxy.size) }
 
                 gpsSpeedometer.position(x: 64, y: proxy.size.height - 72)
                 speedLimitBadge.position(x: 112, y: proxy.size.height - 111)
@@ -191,6 +194,16 @@ struct ADASOverlayView: View {
             }
             .frame(width: max(rect.width, 1), height: max(rect.height, 1)).position(x: rect.midX, y: rect.midY)
         }
+    }
+
+    @ViewBuilder private func dasDetectionBox(_ detection: ADASDetection, in size: CGSize) -> some View {
+        let rect = CGRect(x: detection.boundingBox.minX * size.width, y: detection.boundingBox.minY * size.height, width: detection.boundingBox.width * size.width, height: detection.boundingBox.height * size.height)
+        ZStack(alignment: .topLeading) {
+            Rectangle().stroke(.yellow, lineWidth: 2)
+            Text("\(detection.label) \(Int(detection.confidence * 100))%")
+                .font(.caption2.bold()).padding(.horizontal, 4).padding(.vertical, 2)
+                .background(.yellow).foregroundStyle(.black)
+        }.frame(width: max(rect.width, 1), height: max(rect.height, 1)).position(x: rect.midX, y: rect.midY)
     }
 
     private func displayRect(for normalized: CGRect, in size: CGSize) -> CGRect {
