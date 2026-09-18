@@ -13,6 +13,7 @@ final class UltralyticsDetectionEngine: @unchecked Sendable {
     private var busy = false
     private(set) var latestDetections: [ADASDetection] = []
     private(set) var inferenceMilliseconds: Double = 0
+    var onResult: (([ADASDetection], Double) -> Void)?
 
     func submit(pixelBuffer: CVPixelBuffer) {
         guard !busy else { return }
@@ -25,6 +26,7 @@ final class UltralyticsDetectionEngine: @unchecked Sendable {
                 let ms = (ProcessInfo.processInfo.systemUptime - start) * 1000
                 self.latestDetections = detections
                 self.inferenceMilliseconds = ms
+                self.onResult?(detections, ms)
             }
         }
     }
