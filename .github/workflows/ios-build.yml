@@ -29,8 +29,8 @@ jobs:
           test -f "$MODEL_DIR/Manifest.json"
       - name: Build bundled UFLDv2 lane model
         run: |
-          python3 -m pip install --quiet onnx onnxruntime
-          bash scripts/download-lane-model.sh
+          mkdir -p xADAS-iOS/Models
+          python3 scripts/extract-ufldv2-model.py xADAS-iOS/Models/UFLDv2TuSimpleRes18Int8.onnx
           test -s xADAS-iOS/Models/UFLDv2TuSimpleRes18Int8.onnx
       - name: Generate Xcode project
         run: xcodegen generate
