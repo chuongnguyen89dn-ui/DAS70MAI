@@ -16,6 +16,7 @@ final class UltralyticsDetectionEngine: @unchecked Sendable {
     private(set) var latestDetections: [ADASDetection] = []
     private(set) var inferenceMilliseconds: Double = 0
     var onResult: (([ADASDetection], Double) -> Void)?
+    var onError: ((String) -> Void)?
 
     func submit(pixelBuffer: CVPixelBuffer) {
         if busy {
@@ -31,11 +32,14 @@ final class UltralyticsDetectionEngine: @unchecked Sendable {
         Task { [weak self] in
             guard let self else { return }
             let start = ProcessInfo.processInfo.systemUptime
-            if let detections = try? await self.infer(pixelBuffer: pixelBuffer) {
+            do {
+                let detections = try await self.infer(pixelBuffer: pixelBuffer)
                 let ms = (ProcessInfo.processInfo.systemUptime - start) * 1000
                 self.latestDetections = detections
                 self.inferenceMilliseconds = ms
                 self.onResult?(detections, ms)
+            } catch {
+                self.onError?(error.localizedDescription)
             }
             self.busy = false
             if let next = self.pendingPixelBuffer {
@@ -47,7 +51,7 @@ final class UltralyticsDetectionEngine: @unchecked Sendable {
 
     func infer(pixelBuffer: CVPixelBuffer) async throws -> [ADASDetection] {
         let yolo = try await loadedModel()
-        let result = yolo(CIImage(cvPixelBuffer: pixelBuffer))
+        let result = yolo(CIImage(cvPixelBuffer: pixelBuffer).oriented(.down))
         let detections = result.boxes.map { box in
             ADASDetection(id: UUID(), label: box.cls, confidence: box.conf, boundingBox: box.xywhn)
         }
