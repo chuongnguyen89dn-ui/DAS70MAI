@@ -23,6 +23,11 @@ final class FrameProcessor: ObservableObject {
     @Published private(set) var dasDetections: [ADASDetection] = []
     @Published private(set) var dasInferenceMS: Double = 0
     @Published private(set) var dasRisk = ForwardRisk(level: .clear, object: nil)
+    @Published private(set) var dasLaneSegments: [LaneSegment] = []
+    @Published private(set) var dasReplacedFrames: UInt64 = 0
+    private var dasLaneFrameCounter = 0
+    private let dasLaneDetector = LaneDetector()
+    private var dasWarningDebouncer = WarningDebouncer()
     private let dasWarningFeedback = WarningFeedbackController()
 
     var horizontalFieldOfViewDegrees: Double = 0
@@ -53,9 +58,10 @@ final class FrameProcessor: ObservableObject {
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 self.dasDetections = detections; self.dasInferenceMS = ms
-                let risk = ForwardRiskEvaluator.evaluate(detections)
-                self.dasRisk = risk
-                self.dasWarningFeedback.update(level: risk.level)
+                let rawRisk = ForwardRiskEvaluator.evaluate(detections)
+                let stable = self.dasWarningDebouncer.update(with: rawRisk)
+                self.dasRisk = ForwardRisk(level: stable, object: rawRisk.object)
+                self.dasWarningFeedback.update(level: stable)
             }
         }
     }
@@ -92,6 +98,14 @@ final class FrameProcessor: ObservableObject {
         totalFrames &+= 1
         // DAS YOLO runs off the decoded pixel buffer only; camera/RTSP/render lifecycle is untouched.
         dasYOLO.submit(pixelBuffer: pixelBuffer)
+        dasLaneFrameCounter += 1
+        if dasLaneFrameCounter % 5 == 0 {
+            let detector = dasLaneDetector
+            DispatchQueue.global(qos: .utility).async { [weak self] in
+                let segments = detector.detect(pixelBuffer: pixelBuffer)
+                DispatchQueue.main.async { self?.dasLaneSegments = segments }
+            }
+        }
         inferenceFrameCounter &+= 1
         laneFrameCounter &+= 1
         let stride = adaptiveStride
