@@ -166,7 +166,9 @@ final class RootlessRTSPPlayerView: UIView {
                 width: drawable.texture.width,
                 height: drawable.texture.height
             )
-            let source = CIImage(cvPixelBuffer: pixelBuffer)
+            // A500S native stream arrives inverted relative to the DAS display coordinate system.
+            // Correct it here while preserving the proven RTSP/decode transport.
+            let source = CIImage(cvPixelBuffer: pixelBuffer).oriented(.down)
             guard source.extent.width > 0, source.extent.height > 0 else { return }
             let scale = max(
                 destination.width / source.extent.width,
