@@ -39,10 +39,10 @@ targets:
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         SeventyMaiToken: "__SEVENTYMAI_TOKEN__"
         GraphHopperAPIKey: "__GRAPHHOPPER_API_KEY__"
-        NSCameraUsageDescription: "Ivy uses the camera for real-time driver-assistance vision processing."
+        NSCameraUsageDescription: "DAS70MAI uses the camera for real-time driver-assistance vision processing."
         NSMicrophoneUsageDescription: "Ivy uses the microphone only when you tap the microphone button to speak a destination."
         NSSpeechRecognitionUsageDescription: "Ivy converts your spoken destination into text so it can suggest an address for navigation."
-        NSLocalNetworkUsageDescription: "Ivy connects directly to your 70mai dashcam on its local Wi-Fi network to receive the RTSP video stream."
+        NSLocalNetworkUsageDescription: "DAS70MAI connects directly to your 70mai dashcam on its local Wi-Fi network to receive the RTSP video stream."
         NSLocationWhenInUseUsageDescription: "Ivy uses GPS for vehicle speed, route guidance, road matching, speed-limit data, and driver-assistance logic."
         CFBundleURLTypes:
           - CFBundleURLName: com.hmtnvac.xadas.share
