@@ -39,7 +39,6 @@ targets:
         NSLocalNetworkUsageDescription: "DAS70MAI connects directly to your 70mai dashcam on its local Wi-Fi network to receive the RTSP video stream."
         UIRequiresFullScreen: true
         UISupportedInterfaceOrientations:
-          - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
     settings:
