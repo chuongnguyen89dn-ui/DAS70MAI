@@ -43,13 +43,13 @@ final class FrameProcessor: ObservableObject {
     private var latestLaneDetection: LaneDetection?
 
     init() {
-        dasYOLO.onResult = { [weak self] detections, ms in
-            DispatchQueue.main.async { self?.dasDetections = detections; self?.dasInferenceMS = ms }
-        }
         do { detector = try VehicleDetector(); detectorStatus = "VEHICLE MODEL READY" }
         catch { detector = nil; detectorStatus = error.localizedDescription }
         do { laneDetector = try LaneAIDetector(); laneStatus = "UFLD V2 LANE MODEL READY" }
         catch { laneDetector = nil; laneStatus = error.localizedDescription }
+        dasYOLO.onResult = { [weak self] detections, ms in
+            DispatchQueue.main.async { self?.dasDetections = detections; self?.dasInferenceMS = ms }
+        }
     }
 
     /// Ivy MAX uses speed-aware inference while retaining thermal protection.
