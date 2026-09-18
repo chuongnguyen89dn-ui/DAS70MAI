@@ -6,7 +6,6 @@ struct DriveView: View {
     @AppStorage(CameraSource.selectionKey) private var cameraSourceRaw = CameraSourceChoice.seventyMai.rawValue
     @State private var rtspStatus = "70MAI STARTING"
     @State private var restartToken = UUID()
-    @State private var useVLCFallback = false
     @State private var visionSuspended = false
     @State private var soundEnabled = true
     @State private var vibrationEnabled = true
@@ -74,8 +73,6 @@ struct DriveView: View {
             if !visionSuspended {
                 if selectedSource == .iPhone {
                     CameraPreview(session: cameraManager.session)
-                } else if useVLCFallback {
-                    SeventyMaiPlayerView(urlString: CameraSource.seventyMaiURL, restartToken: restartToken, frameProcessor: a500sProcessor, statusText: $rtspStatus)
                 } else {
                     RootlessSeventyMaiPlayerView(urlString: CameraSource.seventyMaiURL, restartToken: restartToken, frameProcessor: a500sProcessor, statusText: $rtspStatus)
                 }
@@ -105,16 +102,11 @@ struct DriveView: View {
     }
     private func configureSource() {
         visionSuspended=false
-        if selectedSource == .iPhone { cameraManager.start(); useVLCFallback=false }
+        if selectedSource == .iPhone { cameraManager.start() }
         else { cameraManager.stop(); restartA500S() }
     }
     private func restartA500S() {
-        useVLCFallback=false; rtspStatus="70MAI STARTING"; restartToken=UUID(); let token=restartToken
-        DispatchQueue.main.asyncAfter(deadline:.now()+6) {
-            guard selectedSource == .seventyMai, restartToken == token,
-                  a500sProcessor.frameWidth == 0 || a500sProcessor.frameHeight == 0 else { return }
-            rtspStatus="70MAI VLC FALLBACK"; useVLCFallback=true
-        }
+        rtspStatus="70MAI STARTING"; restartToken=UUID()
     }
 }
 
