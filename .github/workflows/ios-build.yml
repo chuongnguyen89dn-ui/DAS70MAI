@@ -31,6 +31,19 @@ jobs:
         run: |
           mkdir -p xADAS-iOS/Models
           python3 scripts/extract-ufldv2-model.py xADAS-iOS/Models/UFLDv2TuSimpleRes18Int8.onnx
+          python3 -m pip install --quiet --disable-pip-version-check onnx onnxruntime
+          python3 - <<'PY'
+          from onnxruntime.quantization import quantize_dynamic, QuantType
+          src='xADAS-iOS/Models/UFLDv2TuSimpleRes18Int8.onnx'
+          dst=src+'.quantized'
+          quantize_dynamic(src, dst, weight_type=QuantType.QInt8)
+          import os
+          before=os.path.getsize(src); after=os.path.getsize(dst)
+          print(f'UFLDv2 FP32={before} bytes INT8={after} bytes ratio={after/before:.3f}')
+          if after >= before * 0.60:
+              raise SystemExit('INT8 lane model did not shrink enough')
+          os.replace(dst, src)
+          PY
           test -s xADAS-iOS/Models/UFLDv2TuSimpleRes18Int8.onnx
       - name: Generate Xcode project
         run: xcodegen generate
@@ -48,6 +61,8 @@ jobs:
           APP="$RUNNER_TEMP/xADAS-Device/Build/Products/Release-iphoneos/DAS70MAI.app"
           find "$APP" -name 'UFLDv2TuSimpleRes18Int8.onnx' -print | tee "$RUNNER_TEMP/lane-bundle.txt"
           test -s "$RUNNER_TEMP/lane-bundle.txt"
+          LANE=$(cat "$RUNNER_TEMP/lane-bundle.txt" | head -1)
+          test "$(stat -f%z "$LANE")" -lt 150000000
       - name: Audit final app payload
         run: |
           APP="$RUNNER_TEMP/xADAS-Device/Build/Products/Release-iphoneos/DAS70MAI.app"
