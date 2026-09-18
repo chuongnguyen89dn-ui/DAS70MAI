@@ -76,7 +76,7 @@ struct DriveView: View {
         }
         .overlay(alignment: .bottom) {
             if !showCalibration && !visionSuspended {
-                HStack(spacing: 16) { Button("CALIBRATE") { showCalibration = true }; Button("SETTING") { showSettings = true } }
+                HStack(spacing: 16) { Button("CALIBRATE") { showCalibration = true }; Button("CAMERA") { showSettings = true } }
                     .buttonStyle(ADASButtonStyle()).padding(.bottom, 22)
             }
         }
@@ -104,7 +104,7 @@ struct DriveView: View {
                 else if selectedSource == .iPhone && !cameraManager.isRunning { cameraManager.start() }
                 else if selectedSource == .seventyMai { rtspStatus = "70MAI RESUMING"; restartToken = UUID(); scheduleNativeFallbackCheck(for: restartToken) }
             case .background:
-                visionSuspended = true; vehicleSpeedMonitor.stop(); cameraManager.stop(); useVLCFallback = false; rtspStatus = "IVY SUSPENDED"; restartToken = UUID()
+                visionSuspended = true; vehicleSpeedMonitor.stop(); cameraManager.stop(); useVLCFallback = false; rtspStatus = "DAS70MAI SUSPENDED"; restartToken = UUID()
             case .inactive: break
             @unknown default: break
             }
