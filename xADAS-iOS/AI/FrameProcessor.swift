@@ -25,6 +25,9 @@ final class FrameProcessor: ObservableObject {
     @Published private(set) var dasRisk = ForwardRisk(level: .clear, object: nil)
     @Published private(set) var dasLaneDetection: LaneDetection?
     @Published private(set) var dasReplacedFrames: UInt64 = 0
+    @Published private(set) var dasFrameAgeMS: Double = 0
+    @Published private(set) var dasInferenceError: String?
+    private var dasLastFrameAt = ProcessInfo.processInfo.systemUptime
     private var dasLaneFrameCounter = 0
     private let dasLaneDetector = LaneDetector()
     private var dasWarningDebouncer = WarningDebouncer()
@@ -58,6 +61,9 @@ final class FrameProcessor: ObservableObject {
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 self.dasDetections = detections; self.dasInferenceMS = ms
+                self.dasReplacedFrames = self.dasYOLO.replacedFrames
+                self.dasFrameAgeMS = max(0, (ProcessInfo.processInfo.systemUptime - self.dasLastFrameAt) * 1000)
+                self.dasInferenceError = nil
                 let rawRisk = ForwardRiskEvaluator.evaluate(detections)
                 let stable = self.dasWarningDebouncer.update(with: rawRisk)
                 self.dasRisk = ForwardRisk(level: stable, object: rawRisk.object)
@@ -97,6 +103,7 @@ final class FrameProcessor: ObservableObject {
     func process(pixelBuffer: CVPixelBuffer, timestamp: TimeInterval = ProcessInfo.processInfo.systemUptime) {
         totalFrames &+= 1
         // DAS YOLO runs off the decoded pixel buffer only; camera/RTSP/render lifecycle is untouched.
+        dasLastFrameAt = ProcessInfo.processInfo.systemUptime
         dasYOLO.submit(pixelBuffer: pixelBuffer)
         dasLaneFrameCounter += 1
         if dasLaneFrameCounter % 5 == 0 {
