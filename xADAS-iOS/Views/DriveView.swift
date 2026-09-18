@@ -7,6 +7,8 @@ struct DriveView: View {
     @State private var restartToken = UUID()
     @State private var useVLCFallback = false
     @State private var visionSuspended = false
+    @State private var soundEnabled = true
+    @State private var vibrationEnabled = true
     @StateObject private var a500sProcessor = FrameProcessor()
     @StateObject private var cameraManager = CameraManager()
 
@@ -38,12 +40,12 @@ struct DriveView: View {
                 HStack {
                     Text(activeProcessor.dasInferenceMS > 0 ? "YOLO READY · \(activeProcessor.dasDetections.count) objects" : "YOLO LOADING")
                     Spacer()
-                    Text(activeProcessor.dasInferenceMS > 0 ? String(format: "%.0f ms", activeProcessor.dasInferenceMS) : "-- ms")
+                    Text(activeProcessor.dasInferenceMS > 0 ? String(format: "%.0f ms · age %.0f ms · drop %llu", activeProcessor.dasInferenceMS, activeProcessor.dasFrameAgeMS, activeProcessor.dasReplacedFrames) : "-- ms")
                 }.font(.caption).foregroundStyle(.secondary)
 
                 HStack(spacing: 16) {
-                    Label("Sound", systemImage: "speaker.wave.2.fill")
-                    Label("Vibration", systemImage: "iphone.radiowaves.left.and.right")
+                    Toggle(isOn: $soundEnabled) { Label("Sound", systemImage: soundEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill") }.toggleStyle(.switch)
+                    Toggle(isOn: $vibrationEnabled) { Label("Vibration", systemImage: "iphone.radiowaves.left.and.right") }.toggleStyle(.switch)
                     Spacer()
                     if selectedSource == .seventyMai { Button("RECONNECT") { restartA500S() } }
                 }.font(.caption)
@@ -58,6 +60,8 @@ struct DriveView: View {
         .preferredColorScheme(.dark)
         .onAppear { configureSource() }
         .onChange(of: cameraSourceRaw) { _ in configureSource() }
+        .onChange(of: soundEnabled) { v in a500sProcessor.setDASSoundEnabled(v); cameraManager.frameProcessor.setDASSoundEnabled(v) }
+        .onChange(of: vibrationEnabled) { v in a500sProcessor.setDASVibrationEnabled(v); cameraManager.frameProcessor.setDASVibrationEnabled(v) }
         .onChange(of: scenePhase) { phase in
             if phase == .active { visionSuspended = false; configureSource() }
             else if phase == .background { visionSuspended = true; cameraManager.stop() }
