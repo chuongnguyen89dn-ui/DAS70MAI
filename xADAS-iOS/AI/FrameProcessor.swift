@@ -31,7 +31,6 @@ final class FrameProcessor: ObservableObject {
     @Published private(set) var dasInputDroppedFrames: UInt64 = 0
     private var dasLastFrameAt = ProcessInfo.processInfo.systemUptime
     private var dasLaneFrameCounter = 0
-    private let dasLaneDetector = LaneDetector()
     private var dasWarningDebouncer = WarningDebouncer()
     private let dasWarningFeedback = WarningFeedbackController()
 
@@ -71,7 +70,7 @@ final class FrameProcessor: ObservableObject {
                 self.dasFrameAgeMS = max(0, (ProcessInfo.processInfo.systemUptime - self.dasLastFrameAt) * 1000)
                 self.dasPipelineAgeMS = self.dasFrameAgeMS
                 self.dasInferenceError = nil
-                let rawRisk = ForwardRiskEvaluator.evaluate(detections)
+                let rawRisk = self.evaluateDASHazard(detections)
                 let stable = self.dasWarningDebouncer.update(with: rawRisk)
                 self.dasRisk = ForwardRisk(level: stable, object: rawRisk.object)
                 self.dasWarningFeedback.update(level: stable)
@@ -119,12 +118,18 @@ final class FrameProcessor: ObservableObject {
         dasLastFrameAt = ProcessInfo.processInfo.systemUptime
         dasYOLO.submit(pixelBuffer: pixelBuffer, rotate180: dasRotate180)
         dasLaneFrameCounter += 1
-        if dasLaneFrameCounter % 5 == 0 {
-            let detector = dasLaneDetector
+        if dasLaneFrameCounter % 5 == 0, let detector = laneDetector {
+            let rotate180 = dasRotate180
             DispatchQueue.global(qos: .utility).async { [weak self] in
-                let detection = detector.detect(pixelBuffer: pixelBuffer)
+                let detection = try? detector.detect(pixelBuffer: pixelBuffer, rotate180: rotate180)
                 DispatchQueue.main.async { self?.dasLaneDetection = detection }
             }
+        }
+        let dasWidth = CVPixelBufferGetWidth(pixelBuffer)
+        let dasHeight = CVPixelBufferGetHeight(pixelBuffer)
+        DispatchQueue.main.async { [weak self] in
+            self?.frameWidth = dasWidth
+            self?.frameHeight = dasHeight
         }
         inferenceFrameCounter &+= 1
         laneFrameCounter &+= 1
@@ -226,6 +231,57 @@ final class FrameProcessor: ObservableObject {
                 self.laneStatus = newLaneDetection == nil ? "LANE SEARCHING" : "LANE ACTIVE • EGO LOCK"
             }
         }
+    }
+
+
+    private func evaluateDASHazard(_ detections: [ADASDetection]) -> ForwardRisk {
+        guard let lane = dasLaneDetection else {
+            leadDistanceTracker.reset()
+            return ForwardRisk(level: .clear, object: nil)
+        }
+        let candidates = detections.filter { detection in
+            let box = detection.boundingBox
+            let y = 1.0 - Double(box.minY)
+            let x = Double(box.midX)
+            guard y >= 0.34 && y <= 0.97,
+                  let left = fittedLaneX(lane.leftPoints, at: y),
+                  let right = fittedLaneX(lane.rightPoints, at: y),
+                  right > left else { return false }
+            let margin = max(0.015, (right - left) * 0.10)
+            return x >= left - margin && x <= right + margin
+        }
+        guard let hazard = candidates.max(by: {
+            let a = $0.boundingBox, b = $1.boundingBox
+            return (1.0 - Double(a.minY)) + Double(a.width*a.height) <
+                   (1.0 - Double(b.minY)) + Double(b.width*b.height)
+        }) else {
+            leadDistanceTracker.reset()
+            return ForwardRisk(level: .clear, object: nil)
+        }
+        let rawDistance = distanceEstimator.estimate(
+            for: hazard.boundingBox,
+            frameWidth: frameWidth,
+            frameHeight: frameHeight,
+            horizontalFieldOfViewDegrees: horizontalFieldOfViewDegrees,
+            effectiveFocalPixelsAt1920: effectiveFocalPixelsAt1920
+        )
+        let tracked = leadDistanceTracker.update(
+            rawDistance: rawDistance,
+            leadBox: hazard.boundingBox,
+            timestamp: ProcessInfo.processInfo.systemUptime
+        )
+        leadDistanceState = tracked
+        leadDistanceMeters = tracked.distanceMeters
+        var level: ForwardRisk.Level
+        switch tracked.risk {
+        case .danger: level = .warning
+        case .caution: level = .caution
+        case .safe, .unavailable: level = .clear
+        }
+        if let closing = tracked.closingSpeedMetersPerSecond, closing > 5, level == .caution {
+            level = .warning
+        }
+        return ForwardRisk(level: level, object: hazard)
     }
 
     private func leadVehicleIndex(in detections: [VehicleDetection], lane: LaneDetection) -> Int? {
