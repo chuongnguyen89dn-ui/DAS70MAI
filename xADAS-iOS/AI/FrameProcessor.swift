@@ -20,6 +20,8 @@ final class FrameProcessor: ObservableObject {
     @Published private(set) var laneStatus = "LANE MODEL LOADING"
     @Published private(set) var trafficSignState = TrafficSignState()
     @Published private(set) var trafficSignStatus = "SIGN AI PAUSED • PERFORMANCE MODE"
+    @Published private(set) var dasDetections: [ADASDetection] = []
+    @Published private(set) var dasInferenceMS: Double = 0
 
     var horizontalFieldOfViewDegrees: Double = 0
     var effectiveFocalPixelsAt1920: Double?
@@ -41,6 +43,9 @@ final class FrameProcessor: ObservableObject {
     private var latestLaneDetection: LaneDetection?
 
     init() {
+        dasYOLO.onResult = { [weak self] detections, ms in
+            DispatchQueue.main.async { self?.dasDetections = detections; self?.dasInferenceMS = ms }
+        }
         do { detector = try VehicleDetector(); detectorStatus = "VEHICLE MODEL READY" }
         catch { detector = nil; detectorStatus = error.localizedDescription }
         do { laneDetector = try LaneAIDetector(); laneStatus = "UFLD V2 LANE MODEL READY" }
