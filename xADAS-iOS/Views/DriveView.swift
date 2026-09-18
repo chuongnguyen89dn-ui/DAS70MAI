@@ -46,6 +46,8 @@ struct DriveView: View {
                     frameWidth: activeProcessor.frameWidth,
                     frameHeight: activeProcessor.frameHeight,
                     detections: activeProcessor.detections,
+                    dasDetections: activeProcessor.dasDetections,
+                    dasInferenceMS: activeProcessor.dasInferenceMS,
                     leadDistanceState: activeProcessor.leadDistanceState,
                     horizonRatio: UserDefaults.standard.double(forKey: DistanceEstimator.horizonRatioKey),
                     laneDetection: activeProcessor.laneDetection,
