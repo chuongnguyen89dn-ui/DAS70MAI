@@ -10,6 +10,9 @@ packages:
   ONNXRuntime:
     url: https://github.com/microsoft/onnxruntime-swift-package-manager.git
     exactVersion: 1.20.0
+  UltralyticsYOLO:
+    url: https://github.com/ultralytics/yolo-ios-app.git
+    from: 8.9.4
 settings:
   base:
     SWIFT_VERSION: 5.0
@@ -24,6 +27,8 @@ targets:
         product: VLCKit
       - package: ONNXRuntime
         product: onnxruntime
+      - package: UltralyticsYOLO
+        product: UltralyticsYOLO
       - target: IvyShareExtension
     info:
       path: xADAS-iOS/Info.plist
