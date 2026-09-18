@@ -38,6 +38,11 @@ struct ADASOverlayView: View {
                                 Circle().fill(isCameraRunning ? .green : .yellow).frame(width: 7, height: 7)
                                 Text(cameraLabel).font(.caption2.monospaced().bold())
                             }
+                            // DAS70MAI phase 1: expose YOLO inference latency without touching
+                            // the proven 70mai RTSP/decode/render path.
+                            Text(inferenceMS > 0 ? String(format: "YOLO %.1f ms", inferenceMS) : "YOLO READY")
+                                .font(.caption2.monospaced().bold())
+                                .foregroundStyle(inferenceMS > 80 ? .orange : .green)
                         }
                         Spacer()
                         HStack(spacing: 5) {
