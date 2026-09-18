@@ -11,8 +11,8 @@ struct ADASOverlayView: View {
     let frameWidth: Int
     let frameHeight: Int
     let detections: [VehicleDetection]
-    let dasDetections: [ADASDetection]
-    let dasInferenceMS: Double
+    var dasDetections: [ADASDetection] = []
+    var dasInferenceMS: Double = 0
     let leadDistanceState: LeadDistanceState
     let horizonRatio: Double
     let laneDetection: LaneDetection?
