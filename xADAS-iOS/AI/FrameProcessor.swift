@@ -57,6 +57,9 @@ final class FrameProcessor: ObservableObject {
         catch { detector = nil; detectorStatus = error.localizedDescription }
         do { laneDetector = try LaneAIDetector(); laneStatus = "UFLD V2 LANE MODEL READY" }
         catch { laneDetector = nil; laneStatus = error.localizedDescription }
+        dasYOLO.onError = { [weak self] message in
+            DispatchQueue.main.async { self?.dasInferenceError = message }
+        }
         dasYOLO.onResult = { [weak self] detections, ms in
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
