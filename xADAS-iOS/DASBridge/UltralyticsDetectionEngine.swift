@@ -56,7 +56,7 @@ final class UltralyticsDetectionEngine: @unchecked Sendable {
         let detections = result.boxes.map { box in
             ADASDetection(id: UUID(), label: box.cls, confidence: box.conf, boundingBox: box.xywhn)
         }
-        return detections.filter { $0.confidence >= 0.35 }
+        return RoadObjectFilter.relevant(detections, minimumConfidence: 0.35)
     }
 
     private func loadedModel() async throws -> YOLO {
