@@ -94,7 +94,7 @@ final class FrameProcessor: ObservableObject {
         }
     }
 
-    func process(sampleBuffer: CMSampleBuffer) {
+    @MainActor func setDASSoundEnabled(_ enabled: Bool) { dasWarningFeedback.soundEnabled = enabled }\n    @MainActor func setDASVibrationEnabled(_ enabled: Bool) { dasWarningFeedback.vibrationEnabled = enabled }\n\n    func process(sampleBuffer: CMSampleBuffer) {
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         let sampleTime = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
         process(pixelBuffer: pixelBuffer, timestamp: sampleTime.isFinite ? sampleTime : ProcessInfo.processInfo.systemUptime)
