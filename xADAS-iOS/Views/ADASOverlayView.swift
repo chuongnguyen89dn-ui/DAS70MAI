@@ -13,6 +13,7 @@ struct ADASOverlayView: View {
     let detections: [VehicleDetection]
     var dasDetections: [ADASDetection] = []
     var dasInferenceMS: Double = 0
+    var dasRisk: ForwardRisk = ForwardRisk(level: .clear, object: nil)
     let leadDistanceState: LeadDistanceState
     let horizonRatio: Double
     let laneDetection: LaneDetection?
