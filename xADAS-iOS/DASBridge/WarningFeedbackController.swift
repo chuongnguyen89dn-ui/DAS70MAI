@@ -4,7 +4,6 @@ import UIKit
 
 /// Presentation feedback for the current visual-risk heuristic.
 /// This does not claim calibrated FCW/TTC behavior.
-@MainActor
 final class WarningFeedbackController {
     var soundEnabled = true
     var vibrationEnabled = true
@@ -13,7 +12,7 @@ final class WarningFeedbackController {
     private var lastWarningAt = Date.distantPast
     private let warningCooldown: TimeInterval = 1.5
 
-    func update(level: ForwardRisk.Level) {
+    @MainActor func update(level: ForwardRisk.Level) {
         guard level != lastLevel else { return }
         lastLevel = level
 
@@ -31,7 +30,7 @@ final class WarningFeedbackController {
         }
     }
 
-    func reset() {
+    @MainActor func reset() {
         lastLevel = .clear
         lastWarningAt = .distantPast
     }
