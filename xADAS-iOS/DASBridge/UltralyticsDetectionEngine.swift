@@ -18,22 +18,22 @@ final class UltralyticsDetectionEngine: @unchecked Sendable {
     var onResult: (([ADASDetection], Double) -> Void)?
     var onError: ((String) -> Void)?
 
-    func submit(pixelBuffer: CVPixelBuffer) {
+    func submit(pixelBuffer: CVPixelBuffer, rotate180: Bool = false) {
         if busy {
             if pendingPixelBuffer != nil { replacedFrames &+= 1 }
             pendingPixelBuffer = pixelBuffer
             return
         }
-        run(pixelBuffer)
+        run(pixelBuffer, rotate180: rotate180)
     }
 
-    private func run(_ pixelBuffer: CVPixelBuffer) {
+    private func run(_ pixelBuffer: CVPixelBuffer, rotate180: Bool) {
         busy = true
         Task { [weak self] in
             guard let self else { return }
             let start = ProcessInfo.processInfo.systemUptime
             do {
-                let detections = try await self.infer(pixelBuffer: pixelBuffer)
+                let detections = try await self.infer(pixelBuffer: pixelBuffer, rotate180: rotate180)
                 let ms = (ProcessInfo.processInfo.systemUptime - start) * 1000
                 self.latestDetections = detections
                 self.inferenceMilliseconds = ms
@@ -44,14 +44,15 @@ final class UltralyticsDetectionEngine: @unchecked Sendable {
             self.busy = false
             if let next = self.pendingPixelBuffer {
                 self.pendingPixelBuffer = nil
-                self.run(next)
+                self.run(next, rotate180: rotate180)
             }
         }
     }
 
-    func infer(pixelBuffer: CVPixelBuffer) async throws -> [ADASDetection] {
+    func infer(pixelBuffer: CVPixelBuffer, rotate180: Bool) async throws -> [ADASDetection] {
         let yolo = try await loadedModel()
-        let result = yolo(CIImage(cvPixelBuffer: pixelBuffer).oriented(.down))
+        let image = CIImage(cvPixelBuffer: pixelBuffer)
+        let result = yolo(rotate180 ? image.oriented(.down) : image)
         let detections = result.boxes.map { box in
             ADASDetection(id: UUID(), label: box.cls, confidence: box.conf, boundingBox: box.xywhn)
         }
