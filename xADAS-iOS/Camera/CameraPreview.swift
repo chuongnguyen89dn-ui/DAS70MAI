@@ -24,7 +24,7 @@ final class PreviewView: UIView {
     var videoPreviewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
 
     func attach(session: AVCaptureSession) {
-        videoPreviewLayer.videoGravity = .resizeAspect
+        videoPreviewLayer.videoGravity = .resizeAspectFill
         guard attachedSession !== session else { return }
         attachedSession = session
         videoPreviewLayer.session = session
