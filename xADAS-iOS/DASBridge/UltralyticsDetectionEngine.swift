@@ -11,22 +11,36 @@ final class UltralyticsDetectionEngine: @unchecked Sendable {
     private var loadingModel: YOLO?
     private var loadingTask: Task<YOLO, Error>?
     private var busy = false
+    private var pendingPixelBuffer: CVPixelBuffer?
+    private(set) var replacedFrames: UInt64 = 0
     private(set) var latestDetections: [ADASDetection] = []
     private(set) var inferenceMilliseconds: Double = 0
     var onResult: (([ADASDetection], Double) -> Void)?
 
     func submit(pixelBuffer: CVPixelBuffer) {
-        guard !busy else { return }
+        if busy {
+            if pendingPixelBuffer != nil { replacedFrames &+= 1 }
+            pendingPixelBuffer = pixelBuffer
+            return
+        }
+        run(pixelBuffer)
+    }
+
+    private func run(_ pixelBuffer: CVPixelBuffer) {
         busy = true
         Task { [weak self] in
             guard let self else { return }
-            defer { self.busy = false }
             let start = ProcessInfo.processInfo.systemUptime
             if let detections = try? await self.infer(pixelBuffer: pixelBuffer) {
                 let ms = (ProcessInfo.processInfo.systemUptime - start) * 1000
                 self.latestDetections = detections
                 self.inferenceMilliseconds = ms
                 self.onResult?(detections, ms)
+            }
+            self.busy = false
+            if let next = self.pendingPixelBuffer {
+                self.pendingPixelBuffer = nil
+                self.run(next)
             }
         }
     }
