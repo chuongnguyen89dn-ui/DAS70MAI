@@ -23,7 +23,7 @@ final class FrameProcessor: ObservableObject {
     @Published private(set) var dasDetections: [ADASDetection] = []
     @Published private(set) var dasInferenceMS: Double = 0
     @Published private(set) var dasRisk = ForwardRisk(level: .clear, object: nil)
-    @Published private(set) var dasLaneSegments: [LaneSegment] = []
+    @Published private(set) var dasLaneDetection: LaneDetection?
     @Published private(set) var dasReplacedFrames: UInt64 = 0
     private var dasLaneFrameCounter = 0
     private let dasLaneDetector = LaneDetector()
@@ -102,8 +102,8 @@ final class FrameProcessor: ObservableObject {
         if dasLaneFrameCounter % 5 == 0 {
             let detector = dasLaneDetector
             DispatchQueue.global(qos: .utility).async { [weak self] in
-                let segments = detector.detect(pixelBuffer: pixelBuffer)
-                DispatchQueue.main.async { self?.dasLaneSegments = segments }
+                let detection = detector.detect(pixelBuffer: pixelBuffer)
+                DispatchQueue.main.async { self?.dasLaneDetection = detection }
             }
         }
         inferenceFrameCounter &+= 1
