@@ -29,7 +29,12 @@ final class FrameProcessor: ObservableObject {
     @Published private(set) var dasInferenceError: String?
     @Published private(set) var dasPipelineAgeMS: Double = 0
     @Published private(set) var dasInputDroppedFrames: UInt64 = 0
+    @Published private(set) var dasFPS: Double = 0
+    @Published private(set) var dasDropPercent: Double = 0
     private var dasLastFrameAt = ProcessInfo.processInfo.systemUptime
+    private var dasFPSWindowAt = ProcessInfo.processInfo.systemUptime
+    private var dasFPSWindowFrames: UInt64 = 0
+    private var dasFPSWindowDrops: UInt64 = 0
     private var dasLaneFrameCounter = 0
     private var dasWarningDebouncer = WarningDebouncer()
     private let dasWarningFeedback = WarningFeedbackController()
@@ -78,7 +83,9 @@ final class FrameProcessor: ObservableObject {
         }
     }
 
-    func noteDASInputDrop() { DispatchQueue.main.async { [weak self] in self?.dasInputDroppedFrames &+= 1 } }
+    func noteDASInputDrop() { DispatchQueue.main.async { [weak self] in
+        guard let self else { return }; self.dasInputDroppedFrames &+= 1; self.dasFPSWindowDrops &+= 1
+    } }
 
     @MainActor func setDASSoundEnabled(_ enabled: Bool) { dasWarningFeedback.soundEnabled = enabled }
     @MainActor func setDASVibrationEnabled(_ enabled: Bool) { dasWarningFeedback.vibrationEnabled = enabled }
@@ -114,6 +121,16 @@ final class FrameProcessor: ObservableObject {
 
     func process(pixelBuffer: CVPixelBuffer, timestamp: TimeInterval = ProcessInfo.processInfo.systemUptime) {
         totalFrames &+= 1
+        dasFPSWindowFrames &+= 1
+        let dasNow = ProcessInfo.processInfo.systemUptime
+        if dasNow - dasFPSWindowAt >= 0.5 {
+            let elapsed = dasNow - dasFPSWindowAt
+            let frames = dasFPSWindowFrames, drops = dasFPSWindowDrops
+            let fps = Double(frames) / elapsed
+            let dropPct = frames > 0 ? Double(drops) * 100.0 / Double(frames + drops) : 0
+            dasFPSWindowAt = dasNow; dasFPSWindowFrames = 0; dasFPSWindowDrops = 0
+            DispatchQueue.main.async { [weak self] in self?.dasFPS = fps; self?.dasDropPercent = dropPct }
+        }
         // DAS YOLO runs off the decoded pixel buffer only; camera/RTSP/render lifecycle is untouched.
         dasLastFrameAt = ProcessInfo.processInfo.systemUptime
         dasYOLO.submit(pixelBuffer: pixelBuffer, rotate180: dasRotate180)
