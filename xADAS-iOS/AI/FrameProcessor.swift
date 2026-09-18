@@ -27,6 +27,8 @@ final class FrameProcessor: ObservableObject {
     @Published private(set) var dasReplacedFrames: UInt64 = 0
     @Published private(set) var dasFrameAgeMS: Double = 0
     @Published private(set) var dasInferenceError: String?
+    @Published private(set) var dasPipelineAgeMS: Double = 0
+    @Published private(set) var dasInputDroppedFrames: UInt64 = 0
     private var dasLastFrameAt = ProcessInfo.processInfo.systemUptime
     private var dasLaneFrameCounter = 0
     private let dasLaneDetector = LaneDetector()
@@ -66,6 +68,7 @@ final class FrameProcessor: ObservableObject {
                 self.dasDetections = detections; self.dasInferenceMS = ms
                 self.dasReplacedFrames = self.dasYOLO.replacedFrames
                 self.dasFrameAgeMS = max(0, (ProcessInfo.processInfo.systemUptime - self.dasLastFrameAt) * 1000)
+                self.dasPipelineAgeMS = self.dasFrameAgeMS
                 self.dasInferenceError = nil
                 let rawRisk = ForwardRiskEvaluator.evaluate(detections)
                 let stable = self.dasWarningDebouncer.update(with: rawRisk)
@@ -74,6 +77,8 @@ final class FrameProcessor: ObservableObject {
             }
         }
     }
+
+    func noteDASInputDrop() { DispatchQueue.main.async { [weak self] in self?.dasInputDroppedFrames &+= 1 } }
 
     @MainActor func setDASSoundEnabled(_ enabled: Bool) { dasWarningFeedback.soundEnabled = enabled }
     @MainActor func setDASVibrationEnabled(_ enabled: Bool) { dasWarningFeedback.vibrationEnabled = enabled }
