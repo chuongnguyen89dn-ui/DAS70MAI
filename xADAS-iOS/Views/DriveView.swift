@@ -20,43 +20,26 @@ struct DriveView: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            if isLandscape {
-                cameraStage(cornerRadius: 0).ignoresSafeArea()
-                VStack {
-                    HStack {
-                        Spacer()
-                        riskBadge.padding(12)
-                    }
+            VStack(spacing: 12) {
+                header
+                cameraStage(cornerRadius: 18).frame(maxHeight: .infinity).clipped()
+                HStack {
+                    Text(yoloStatus)
                     Spacer()
-                    HStack {
-                        Text(yoloStatus)
-                        Spacer()
-                        Text(metricsText)
-                    }
-                    .font(.caption).padding(8).background(.black.opacity(0.58))
-                }.foregroundStyle(.white).ignoresSafeArea(edges: .bottom)
-            } else {
-                VStack(spacing: 12) {
-                    header
-                    cameraStage(cornerRadius: 18).frame(maxHeight: .infinity).clipped()
-                    HStack {
-                        Text(yoloStatus)
-                        Spacer()
-                        Text(metricsText)
-                    }.font(.caption).foregroundStyle(activeProcessor.dasInferenceError == nil ? Color.secondary : Color.red)
-                    HStack(spacing: 16) {
-                        Toggle(isOn: $soundEnabled) { Label("Sound", systemImage: soundEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill") }.toggleStyle(.switch)
-                        Toggle(isOn: $vibrationEnabled) { Label("Vibration", systemImage: "iphone.radiowaves.left.and.right") }.toggleStyle(.switch)
-                    }.font(.caption)
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Camera source").font(.caption).foregroundStyle(.secondary)
-                        Picker("Camera source", selection: $cameraSourceRaw) {
-                            Text("70mai A500S").tag(CameraSourceChoice.seventyMai.rawValue)
-                            Text("iPhone Rear").tag(CameraSourceChoice.iPhone.rawValue)
-                        }.pickerStyle(.segmented)
-                    }
-                }.padding().foregroundStyle(.white)
-            }
+                    Text(metricsText)
+                }.font(.caption).foregroundStyle(activeProcessor.dasInferenceError == nil ? Color.secondary : Color.red)
+                HStack(spacing: 16) {
+                    Toggle(isOn: $soundEnabled) { Label("Sound", systemImage: soundEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill") }.toggleStyle(.switch)
+                    Toggle(isOn: $vibrationEnabled) { Label("Vibration", systemImage: "iphone.radiowaves.left.and.right") }.toggleStyle(.switch)
+                }.font(.caption)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Camera source").font(.caption).foregroundStyle(.secondary)
+                    Picker("Camera source", selection: $cameraSourceRaw) {
+                        Text("70mai A500S").tag(CameraSourceChoice.seventyMai.rawValue)
+                        Text("iPhone Rear").tag(CameraSourceChoice.iPhone.rawValue)
+                    }.pickerStyle(.segmented)
+                }
+            }.padding().foregroundStyle(.white)
         }
         .preferredColorScheme(.dark)
         .onAppear { configureSource(); applyFeedback() }
@@ -97,7 +80,7 @@ struct DriveView: View {
                     RootlessSeventyMaiPlayerView(urlString: CameraSource.seventyMaiURL, restartToken: restartToken, frameProcessor: a500sProcessor, statusText: $rtspStatus)
                 }
             }
-            LaneGuideOverlay(showLabel: !isLandscape)
+            LaneGuideOverlay(showLabel: true)
             DASDetectionOverlay(detections: activeProcessor.dasDetections,
                                 imageSize: CGSize(width: max(activeProcessor.frameWidth,1), height: max(activeProcessor.frameHeight,1)))
         }
@@ -110,7 +93,7 @@ struct DriveView: View {
         return "YOLO LOADING"
     }
     private var metricsText: String {
-        activeProcessor.dasInferenceMS > 0 ? String(format:"%.0f ms · age %.0f ms · drop %llu",activeProcessor.dasInferenceMS,activeProcessor.dasFrameAgeMS,activeProcessor.dasReplacedFrames) : "-- ms"
+        activeProcessor.dasInferenceMS > 0 ? String(format:"AI %.0f ms · age %.0f ms · drop %llu",activeProcessor.dasInferenceMS,activeProcessor.dasPipelineAgeMS,activeProcessor.dasReplacedFrames + activeProcessor.dasInputDroppedFrames) : "-- ms"
     }
     private var riskText: String { switch activeProcessor.dasRisk.level { case .clear:"CLEAR"; case .caution:"CAUTION"; case .warning:"WARNING" } }
     private var riskColor: Color { switch activeProcessor.dasRisk.level { case .clear:.green; case .caution:.orange; case .warning:.red } }
