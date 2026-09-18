@@ -19,8 +19,8 @@ final class CameraManager: NSObject, ObservableObject {
     private var wantsToRun = false
     private var frameCounter = 0
     private var fpsWindowStart = ProcessInfo.processInfo.systemUptime
-    @available(iOS 17.0, *) private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
-    @available(iOS 17.0, *) private var rotationObservation: NSKeyValueObservation?
+    private var rotationCoordinator: AnyObject?
+    private var rotationObservation: NSKeyValueObservation?
 
     override init() {
         super.init()
