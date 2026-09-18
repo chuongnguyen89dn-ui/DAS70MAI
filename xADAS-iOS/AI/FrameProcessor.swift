@@ -22,6 +22,8 @@ final class FrameProcessor: ObservableObject {
     @Published private(set) var trafficSignStatus = "SIGN AI PAUSED • PERFORMANCE MODE"
     @Published private(set) var dasDetections: [ADASDetection] = []
     @Published private(set) var dasInferenceMS: Double = 0
+    @Published private(set) var dasRisk = ForwardRisk(level: .clear, object: nil)
+    private let dasWarningFeedback = WarningFeedbackController()
 
     var horizontalFieldOfViewDegrees: Double = 0
     var effectiveFocalPixelsAt1920: Double?
@@ -48,7 +50,13 @@ final class FrameProcessor: ObservableObject {
         do { laneDetector = try LaneAIDetector(); laneStatus = "UFLD V2 LANE MODEL READY" }
         catch { laneDetector = nil; laneStatus = error.localizedDescription }
         dasYOLO.onResult = { [weak self] detections, ms in
-            DispatchQueue.main.async { self?.dasDetections = detections; self?.dasInferenceMS = ms }
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.dasDetections = detections; self.dasInferenceMS = ms
+                let risk = ForwardRiskEvaluator.evaluate(detections)
+                self.dasRisk = risk
+                self.dasWarningFeedback.update(level: risk.level)
+            }
         }
     }
 
