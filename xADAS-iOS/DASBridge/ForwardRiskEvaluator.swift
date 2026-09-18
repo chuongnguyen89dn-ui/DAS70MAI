@@ -9,7 +9,7 @@ struct ForwardRisk: Sendable {
 struct ForwardRiskEvaluator {
     /// Demo visual-risk gate only. This is not verified TTC/FCW until calibrated with camera geometry and speed.
     static func evaluate(_ detections: [ADASDetection]) -> ForwardRisk {
-        let candidates = RoadObjectFilter.relevant(detections).filter { detection in
+        let candidates = detections.filter { detection in
             let centerX = detection.boundingBox.midX
             return centerX > 0.30 && centerX < 0.70
         }
