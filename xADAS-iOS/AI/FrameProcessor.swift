@@ -72,6 +72,9 @@ final class FrameProcessor: ObservableObject {
         }
     }
 
+    @MainActor func setDASSoundEnabled(_ enabled: Bool) { dasWarningFeedback.soundEnabled = enabled }
+    @MainActor func setDASVibrationEnabled(_ enabled: Bool) { dasWarningFeedback.vibrationEnabled = enabled }
+
     /// Ivy MAX uses speed-aware inference while retaining thermal protection.
     /// Highway: maximum lead/lane reaction rate.
     /// City: balanced load.
