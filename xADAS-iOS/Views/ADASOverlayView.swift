@@ -31,8 +31,7 @@ struct ADASOverlayView: View {
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 4) {
-                                Text("Ivy").font(.system(size: 24, weight: .black, design: .rounded)).italic()
-                                Text("♥").font(.system(size: 20, weight: .black, design: .rounded)).foregroundStyle(.pink)
+                                Text("DAS70MAI").font(.system(size: 22, weight: .black, design: .rounded)).italic()
                             }
                             HStack(spacing: 5) {
                                 Circle().fill(isCameraRunning ? .green : .yellow).frame(width: 7, height: 7)
