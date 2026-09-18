@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DriveView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @AppStorage(CameraSource.selectionKey) private var cameraSourceRaw = CameraSourceChoice.seventyMai.rawValue
     @State private var rtspStatus = "70MAI STARTING"
     @State private var restartToken = UUID()
@@ -14,54 +15,54 @@ struct DriveView: View {
 
     private var selectedSource: CameraSourceChoice { CameraSourceChoice(rawValue: cameraSourceRaw) ?? .seventyMai }
     private var activeProcessor: FrameProcessor { selectedSource == .iPhone ? cameraManager.frameProcessor : a500sProcessor }
+    private var isLandscape: Bool { verticalSizeClass == .compact }
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            VStack(spacing: 12) {
-                header
-                ZStack {
-                    RoundedRectangle(cornerRadius: 18).fill(Color.white.opacity(0.06))
-                    if !visionSuspended {
-                        if selectedSource == .iPhone {
-                            CameraPreview(session: cameraManager.session).clipShape(RoundedRectangle(cornerRadius: 18))
-                        } else if useVLCFallback {
-                            SeventyMaiPlayerView(urlString: CameraSource.seventyMaiURL, restartToken: restartToken, frameProcessor: a500sProcessor, statusText: $rtspStatus).clipShape(RoundedRectangle(cornerRadius: 18))
-                        } else {
-                            RootlessSeventyMaiPlayerView(urlString: CameraSource.seventyMaiURL, restartToken: restartToken, frameProcessor: a500sProcessor, statusText: $rtspStatus).clipShape(RoundedRectangle(cornerRadius: 18))
-                        }
+            if isLandscape {
+                cameraStage(cornerRadius: 0).ignoresSafeArea()
+                VStack {
+                    HStack {
+                        Spacer()
+                        riskBadge.padding(12)
                     }
-                    LaneGuideOverlay().clipShape(RoundedRectangle(cornerRadius: 18))
-                    DASLaneDetectionOverlay(detection: activeProcessor.dasLaneDetection).clipShape(RoundedRectangle(cornerRadius: 18))
-                    DASDetectionOverlay(detections: activeProcessor.dasDetections).clipShape(RoundedRectangle(cornerRadius: 18))
-                }
-                .frame(maxHeight: .infinity).clipped()
-
-                HStack {
-                    Text(activeProcessor.dasInferenceMS > 0 ? "YOLO READY · \(activeProcessor.dasDetections.count) objects" : "YOLO LOADING")
                     Spacer()
-                    Text(activeProcessor.dasInferenceMS > 0 ? String(format: "%.0f ms · age %.0f ms · drop %llu", activeProcessor.dasInferenceMS, activeProcessor.dasFrameAgeMS, activeProcessor.dasReplacedFrames) : "-- ms")
-                }.font(.caption).foregroundStyle(.secondary)
-
-                HStack(spacing: 16) {
-                    Toggle(isOn: $soundEnabled) { Label("Sound", systemImage: soundEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill") }.toggleStyle(.switch)
-                    Toggle(isOn: $vibrationEnabled) { Label("Vibration", systemImage: "iphone.radiowaves.left.and.right") }.toggleStyle(.switch)
-                    Spacer()
-                    if selectedSource == .seventyMai { Button("RECONNECT") { restartA500S() } }
-                }.font(.caption)
-
-                Picker("Camera source", selection: $cameraSourceRaw) {
-                    Text("70mai A500S").tag(CameraSourceChoice.seventyMai.rawValue)
-                    Text("iPhone Rear").tag(CameraSourceChoice.iPhone.rawValue)
-                }.pickerStyle(.segmented)
+                    HStack {
+                        Text(yoloStatus)
+                        Spacer()
+                        Text(metricsText)
+                    }
+                    .font(.caption).padding(8).background(.black.opacity(0.58))
+                }.foregroundStyle(.white).ignoresSafeArea(edges: .bottom)
+            } else {
+                VStack(spacing: 12) {
+                    header
+                    cameraStage(cornerRadius: 18).frame(maxHeight: .infinity).clipped()
+                    HStack {
+                        Text(yoloStatus)
+                        Spacer()
+                        Text(metricsText)
+                    }.font(.caption).foregroundStyle(activeProcessor.dasInferenceError == nil ? Color.secondary : Color.red)
+                    HStack(spacing: 16) {
+                        Toggle(isOn: $soundEnabled) { Label("Sound", systemImage: soundEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill") }.toggleStyle(.switch)
+                        Toggle(isOn: $vibrationEnabled) { Label("Vibration", systemImage: "iphone.radiowaves.left.and.right") }.toggleStyle(.switch)
+                    }.font(.caption)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Camera source").font(.caption).foregroundStyle(.secondary)
+                        Picker("Camera source", selection: $cameraSourceRaw) {
+                            Text("70mai A500S").tag(CameraSourceChoice.seventyMai.rawValue)
+                            Text("iPhone Rear").tag(CameraSourceChoice.iPhone.rawValue)
+                        }.pickerStyle(.segmented)
+                    }
+                }.padding().foregroundStyle(.white)
             }
-            .padding().foregroundStyle(.white)
         }
         .preferredColorScheme(.dark)
-        .onAppear { configureSource() }
+        .onAppear { configureSource(); applyFeedback() }
         .onChange(of: cameraSourceRaw) { _ in configureSource() }
-        .onChange(of: soundEnabled) { v in a500sProcessor.setDASSoundEnabled(v); cameraManager.frameProcessor.setDASSoundEnabled(v) }
-        .onChange(of: vibrationEnabled) { v in a500sProcessor.setDASVibrationEnabled(v); cameraManager.frameProcessor.setDASVibrationEnabled(v) }
+        .onChange(of: soundEnabled) { _ in applyFeedback() }
+        .onChange(of: vibrationEnabled) { _ in applyFeedback() }
         .onChange(of: scenePhase) { phase in
             if phase == .active { visionSuspended = false; configureSource() }
             else if phase == .background { visionSuspended = true; cameraManager.stop() }
@@ -73,77 +74,106 @@ struct DriveView: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text("DAS70MAI").font(.title2.bold())
-                Text(selectedSource == .seventyMai ? "70mai A500S · \(rtspStatus)" : "iPhone Rear · active").font(.caption).foregroundStyle(.secondary)
+                Text(selectedSource == .seventyMai ? "70mai A500S · \(rtspStatus)" : "iPhone Rear · Test").font(.caption).foregroundStyle(.secondary)
             }
-            Spacer()
-            Text(riskText).font(.caption.bold()).padding(.horizontal, 10).padding(.vertical, 6)
-                .background(riskColor.opacity(0.85)).clipShape(Capsule())
+            Spacer(); riskBadge
         }
     }
 
-    private var riskText: String {
-        switch activeProcessor.dasRisk.level { case .clear: "CLEAR"; case .caution: "CAUTION"; case .warning: "WARNING" }
-    }
-    private var riskColor: Color {
-        switch activeProcessor.dasRisk.level { case .clear: .green; case .caution: .orange; case .warning: .red }
+    private var riskBadge: some View {
+        Text(riskText).font(.caption.bold()).padding(.horizontal,10).padding(.vertical,6)
+            .background(riskColor.opacity(0.85)).clipShape(Capsule())
     }
 
+    @ViewBuilder private func cameraStage(cornerRadius: CGFloat) -> some View {
+        ZStack {
+            Color.black
+            if !visionSuspended {
+                if selectedSource == .iPhone {
+                    CameraPreview(session: cameraManager.session)
+                } else if useVLCFallback {
+                    SeventyMaiPlayerView(urlString: CameraSource.seventyMaiURL, restartToken: restartToken, frameProcessor: a500sProcessor, statusText: $rtspStatus)
+                } else {
+                    RootlessSeventyMaiPlayerView(urlString: CameraSource.seventyMaiURL, restartToken: restartToken, frameProcessor: a500sProcessor, statusText: $rtspStatus)
+                }
+            }
+            LaneGuideOverlay(showLabel: !isLandscape)
+            DASDetectionOverlay(detections: activeProcessor.dasDetections,
+                                imageSize: CGSize(width: max(activeProcessor.frameWidth,1), height: max(activeProcessor.frameHeight,1)))
+        }
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+    }
+
+    private var yoloStatus: String {
+        if let e = activeProcessor.dasInferenceError { return "YOLO ERROR · \(e)" }
+        if activeProcessor.dasInferenceMS > 0 { return "YOLO READY · \(activeProcessor.dasDetections.count) objects · lanes \(activeProcessor.dasLaneDetection == nil ? 0 : 1)" }
+        return "YOLO LOADING"
+    }
+    private var metricsText: String {
+        activeProcessor.dasInferenceMS > 0 ? String(format:"%.0f ms · age %.0f ms · drop %llu",activeProcessor.dasInferenceMS,activeProcessor.dasFrameAgeMS,activeProcessor.dasReplacedFrames) : "-- ms"
+    }
+    private var riskText: String { switch activeProcessor.dasRisk.level { case .clear:"CLEAR"; case .caution:"CAUTION"; case .warning:"WARNING" } }
+    private var riskColor: Color { switch activeProcessor.dasRisk.level { case .clear:.green; case .caution:.orange; case .warning:.red } }
+
+    private func applyFeedback() {
+        a500sProcessor.setDASSoundEnabled(soundEnabled); a500sProcessor.setDASVibrationEnabled(vibrationEnabled)
+        cameraManager.frameProcessor.setDASSoundEnabled(soundEnabled); cameraManager.frameProcessor.setDASVibrationEnabled(vibrationEnabled)
+    }
     private func configureSource() {
-        visionSuspended = false
-        if selectedSource == .iPhone { cameraManager.start(); useVLCFallback = false }
+        visionSuspended=false
+        if selectedSource == .iPhone { cameraManager.start(); useVLCFallback=false }
         else { cameraManager.stop(); restartA500S() }
     }
     private func restartA500S() {
-        useVLCFallback = false; rtspStatus = "70MAI STARTING"; restartToken = UUID()
-        let token = restartToken
-        DispatchQueue.main.asyncAfter(deadline: .now() + 6) {
+        useVLCFallback=false; rtspStatus="70MAI STARTING"; restartToken=UUID(); let token=restartToken
+        DispatchQueue.main.asyncAfter(deadline:.now()+6) {
             guard selectedSource == .seventyMai, restartToken == token,
                   a500sProcessor.frameWidth == 0 || a500sProcessor.frameHeight == 0 else { return }
-            rtspStatus = "70MAI VLC FALLBACK"; useVLCFallback = true
+            rtspStatus="70MAI VLC FALLBACK"; useVLCFallback=true
         }
     }
 }
 
 private struct DASDetectionOverlay: View {
-    let detections: [ADASDetection]
+    let detections:[ADASDetection]; let imageSize:CGSize
     var body: some View {
-        GeometryReader { geometry in
-            ForEach(detections) { detection in
-                let r = detection.boundingBox
-                let rect = CGRect(x: r.minX * geometry.size.width, y: r.minY * geometry.size.height,
-                                  width: r.width * geometry.size.width, height: r.height * geometry.size.height)
-                ZStack(alignment: .topLeading) {
-                    Rectangle().stroke(.yellow, lineWidth: 2)
-                    Text("\(detection.label) \(Int(detection.confidence * 100))%")
-                        .font(.caption2.bold()).padding(.horizontal, 4).padding(.vertical, 2)
-                        .background(.yellow).foregroundStyle(.black)
-                }.frame(width: max(rect.width, 1), height: max(rect.height, 1)).position(x: rect.midX, y: rect.midY)
+        GeometryReader { g in
+            ForEach(detections) { d in
+                let r=displayRect(d.boundingBox,image:imageSize,view:g.size)
+                ZStack(alignment:.topLeading) {
+                    Rectangle().stroke(.yellow,lineWidth:2)
+                    Text("\(d.label) \(Int(d.confidence*100))%").font(.caption2.bold()).padding(.horizontal,4).padding(.vertical,2).background(.yellow).foregroundStyle(.black)
+                }.frame(width:max(r.width,1),height:max(r.height,1)).position(x:r.midX,y:r.midY)
             }
         }.allowsHitTesting(false)
     }
-}
-
-private struct DASLaneDetectionOverlay: View {
-    let detection: LaneDetection?
-    var body: some View {
-        GeometryReader { g in
-            if let d = detection {
-                Path { p in
-                    if let first = d.leftPoints.first { p.move(to: CGPoint(x:first.x*g.size.width,y:first.y*g.size.height)); for q in d.leftPoints.dropFirst(){ p.addLine(to: CGPoint(x:q.x*g.size.width,y:q.y*g.size.height)) } }
-                    if let first = d.rightPoints.first { p.move(to: CGPoint(x:first.x*g.size.width,y:first.y*g.size.height)); for q in d.rightPoints.dropFirst(){ p.addLine(to: CGPoint(x:q.x*g.size.width,y:q.y*g.size.height)) } }
-                }.stroke(.cyan, style: StrokeStyle(lineWidth:4,lineCap:.round))
-            }
-        }.allowsHitTesting(false)
+    private func displayRect(_ r:CGRect,image:CGSize,view:CGSize)->CGRect {
+        guard image.width>1,image.height>1 else { return CGRect(x:r.minX*view.width,y:r.minY*view.height,width:r.width*view.width,height:r.height*view.height) }
+        let s=max(view.width/image.width,view.height/image.height)
+        let scaled=CGSize(width:image.width*s,height:image.height*s)
+        let ox=(scaled.width-view.width)/2, oy=(scaled.height-view.height)/2
+        // A500S inference image is rotated 180 degrees together with the display.
+        let rr=selectedRectForCorrectedOrientation(r)
+        return CGRect(x:rr.minX*image.width*s-ox,y:rr.minY*image.height*s-oy,width:rr.width*image.width*s,height:rr.height*image.height*s)
+    }
+    private func selectedRectForCorrectedOrientation(_ r:CGRect)->CGRect {
+        CGRect(x:1-r.maxX,y:1-r.maxY,width:r.width,height:r.height)
     }
 }
 
 private struct LaneGuideOverlay: View {
+    let showLabel:Bool
     var body: some View {
         GeometryReader { g in
-            Path { p in
-                p.move(to: CGPoint(x:g.size.width*0.14,y:g.size.height*0.98)); p.addLine(to: CGPoint(x:g.size.width*0.43,y:g.size.height*0.48))
-                p.move(to: CGPoint(x:g.size.width*0.86,y:g.size.height*0.98)); p.addLine(to: CGPoint(x:g.size.width*0.57,y:g.size.height*0.48))
-            }.stroke(.yellow.opacity(0.9), style: StrokeStyle(lineWidth:4,lineCap:.round,dash:[12,10]))
+            ZStack {
+                Path { p in
+                    p.move(to:CGPoint(x:g.size.width*0.14,y:g.size.height*0.98)); p.addLine(to:CGPoint(x:g.size.width*0.43,y:g.size.height*0.48))
+                    p.move(to:CGPoint(x:g.size.width*0.86,y:g.size.height*0.98)); p.addLine(to:CGPoint(x:g.size.width*0.57,y:g.size.height*0.48))
+                }.stroke(.yellow.opacity(0.9),style:StrokeStyle(lineWidth:4,lineCap:.round,dash:[12,10]))
+                if showLabel {
+                    Text("LANE GUIDE").font(.caption2.bold()).padding(.horizontal,7).padding(.vertical,4).background(.black.opacity(0.55)).clipShape(Capsule()).position(x:g.size.width*0.5,y:g.size.height*0.44)
+                }
+            }
         }.allowsHitTesting(false)
     }
 }
