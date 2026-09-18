@@ -52,8 +52,8 @@ final class LaneAIDetector {
         session = try ORTSession(env: environment, modelPath: modelURL.path, sessionOptions: options)
     }
 
-    func detect(pixelBuffer: CVPixelBuffer) throws -> LaneDetection? {
-        let input = try makeInput(pixelBuffer: pixelBuffer)
+    func detect(pixelBuffer: CVPixelBuffer, rotate180: Bool = false) throws -> LaneDetection? {
+        let input = try makeInput(pixelBuffer: pixelBuffer, rotate180: rotate180)
         let inputData = input.withUnsafeBufferPointer { Data(buffer: $0) }
         let inputValue = try ORTValue(
             tensorData: NSMutableData(data: inputData),
@@ -137,7 +137,7 @@ final class LaneAIDetector {
         )
     }
 
-    private func makeInput(pixelBuffer: CVPixelBuffer) throws -> [Float32] {
+    private func makeInput(pixelBuffer: CVPixelBuffer, rotate180: Bool) throws -> [Float32] {
         let sourceWidth = CGFloat(CVPixelBufferGetWidth(pixelBuffer))
         let sourceHeight = CGFloat(CVPixelBufferGetHeight(pixelBuffer))
         guard sourceWidth > 0, sourceHeight > 0 else { throw LaneAIDetectorError.invalidFrame }
@@ -157,7 +157,8 @@ final class LaneAIDetector {
         )
         guard result == kCVReturnSuccess, let prepared else { throw LaneAIDetectorError.invalidFrame }
 
-        let source = CIImage(cvPixelBuffer: pixelBuffer)
+        let rawSource = CIImage(cvPixelBuffer: pixelBuffer)
+        let source = rotate180 ? rawSource.oriented(.down) : rawSource
         let resized = source.transformed(by: CGAffineTransform(
             scaleX: CGFloat(Self.inputWidth) / sourceWidth,
             y: CGFloat(Self.resizedHeight) / sourceHeight
