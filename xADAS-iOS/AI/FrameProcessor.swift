@@ -48,6 +48,7 @@ final class FrameProcessor: ObservableObject {
     // Preserve Ivy detector for the existing HUD while DAS YOLO is transplanted in parallel.
     private let detector: VehicleDetector?
     private let dasYOLO = UltralyticsDetectionEngine()
+    var dasRotate180 = false
     private let distanceEstimator = DistanceEstimator()
     private let leadDistanceTracker = LeadDistanceTracker()
     private let laneDetector: LaneAIDetector?
@@ -116,7 +117,7 @@ final class FrameProcessor: ObservableObject {
         totalFrames &+= 1
         // DAS YOLO runs off the decoded pixel buffer only; camera/RTSP/render lifecycle is untouched.
         dasLastFrameAt = ProcessInfo.processInfo.systemUptime
-        dasYOLO.submit(pixelBuffer: pixelBuffer)
+        dasYOLO.submit(pixelBuffer: pixelBuffer, rotate180: dasRotate180)
         dasLaneFrameCounter += 1
         if dasLaneFrameCounter % 5 == 0 {
             let detector = dasLaneDetector
