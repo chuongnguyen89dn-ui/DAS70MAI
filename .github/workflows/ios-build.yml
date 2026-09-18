@@ -13,12 +13,31 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install XcodeGen
         run: brew install xcodegen
+      - name: Download bundled YOLO26n CoreML model
+        run: |
+          set -euo pipefail
+          MODEL_DIR="xADAS-iOS/Models/yolo26n.mlpackage"
+          ZIP="$RUNNER_TEMP/yolo26n.mlpackage.zip"
+          TMP="$RUNNER_TEMP/yolo26n-extract"
+          rm -rf "$MODEL_DIR" "$TMP"
+          mkdir -p "$TMP" "xADAS-iOS/Models"
+          curl -fL --retry 3 --connect-timeout 20 "https://github.com/ultralytics/yolo-ios-app/releases/download/v8.3.0/yolo26n.mlpackage.zip" -o "$ZIP"
+          unzip -tqq "$ZIP"
+          unzip -q "$ZIP" -d "$TMP"
+          SRC=$(find "$TMP" -type d -name 'yolo26n.mlpackage' -print -quit)
+          if [ -n "$SRC" ]; then cp -R "$SRC" "$MODEL_DIR"; else cp -R "$TMP" "$MODEL_DIR"; fi
+          test -f "$MODEL_DIR/Manifest.json"
       - name: Generate Xcode project
         run: xcodegen generate
       - name: Build for iOS Simulator
         run: xcodebuild -project xADAS-iOS.xcodeproj -scheme xADAS-iOS -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
       - name: Build unsigned iPhone app
         run: xcodebuild -project xADAS-iOS.xcodeproj -scheme xADAS-iOS -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/xADAS-Device" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
+      - name: Verify YOLO model is bundled
+        run: |
+          APP="$RUNNER_TEMP/xADAS-Device/Build/Products/Release-iphoneos/DAS70MAI.app"
+          find "$APP" -maxdepth 3 \( -name 'yolo26n.mlmodelc' -o -name 'yolo26n.mlpackage' \) -print | tee "$RUNNER_TEMP/yolo-bundle.txt"
+          test -s "$RUNNER_TEMP/yolo-bundle.txt"
       - name: Package unsigned IPA
         run: |
           APP="$RUNNER_TEMP/xADAS-Device/Build/Products/Release-iphoneos/DAS70MAI.app"
