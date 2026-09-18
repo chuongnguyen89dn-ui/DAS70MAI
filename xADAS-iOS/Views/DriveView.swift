@@ -42,7 +42,7 @@ struct DriveView: View {
             }.padding().foregroundStyle(.white)
         }
         .preferredColorScheme(.dark)
-        .onAppear { a500sProcessor.dasRotate180 = true; cameraManager.frameProcessor.dasRotate180 = false; configureSource(); applyFeedback() }
+        .onAppear { a500sProcessor.dasRotate180 = true; a500sProcessor.effectiveFocalPixelsAt1920 = 890; cameraManager.frameProcessor.dasRotate180 = false; configureSource(); applyFeedback() }
         .onChange(of: cameraSourceRaw) { _ in configureSource() }
         .onChange(of: soundEnabled) { _ in applyFeedback() }
         .onChange(of: vibrationEnabled) { _ in applyFeedback() }
@@ -81,6 +81,7 @@ struct DriveView: View {
                 }
             }
             LaneGuideOverlay(showLabel: true)
+            if let lane = activeProcessor.dasLaneDetection { DASLaneOverlay(lane: lane) }
             DASDetectionOverlay(detections: activeProcessor.dasDetections,
                                 imageSize: CGSize(width: max(activeProcessor.frameWidth,1), height: max(activeProcessor.frameHeight,1)))
         }
@@ -93,7 +94,7 @@ struct DriveView: View {
         return "YOLO LOADING"
     }
     private var metricsText: String {
-        activeProcessor.dasInferenceMS > 0 ? String(format:"AI %.0f ms · age %.0f ms · drop %llu",activeProcessor.dasInferenceMS,activeProcessor.dasPipelineAgeMS,activeProcessor.dasReplacedFrames + activeProcessor.dasInputDroppedFrames) : "-- ms"
+        activeProcessor.dasInferenceMS > 0 ? String(format:"CAM %.0f FPS · AI %.0f ms · age %.0f ms · drop %.1f%%",activeProcessor.dasFPS,activeProcessor.dasInferenceMS,activeProcessor.dasPipelineAgeMS,activeProcessor.dasDropPercent) : "-- ms"
     }
     private var riskText: String { switch activeProcessor.dasRisk.level { case .clear:"CLEAR"; case .caution:"CAUTION"; case .warning:"WARNING" } }
     private var riskColor: Color { switch activeProcessor.dasRisk.level { case .clear:.green; case .caution:.orange; case .warning:.red } }
@@ -154,5 +155,27 @@ private struct LaneGuideOverlay: View {
                 }
             }
         }.allowsHitTesting(false)
+    }
+}
+
+
+private struct DASLaneOverlay: View {
+    let lane: LaneDetection
+    var body: some View {
+        GeometryReader { g in
+            ZStack {
+                lanePath(lane.leftPoints, size: g.size).stroke(.green, lineWidth: 3)
+                lanePath(lane.rightPoints, size: g.size).stroke(.green, lineWidth: 3)
+            }
+        }.allowsHitTesting(false)
+    }
+    private func lanePath(_ points: [CGPoint], size: CGSize) -> Path {
+        Path { p in
+            guard let first = points.first else { return }
+            p.move(to: CGPoint(x: first.x * size.width, y: first.y * size.height))
+            for point in points.dropFirst() {
+                p.addLine(to: CGPoint(x: point.x * size.width, y: point.y * size.height))
+            }
+        }
     }
 }
