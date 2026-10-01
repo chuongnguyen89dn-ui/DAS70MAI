@@ -1,0 +1,11 @@
+TIEP TUC DU AN — DAS70MAI
+
+CAP NHAT 2026-10-02
+- Repo: chuongnguyen89dn-ui/DAS70MAI.
+- Muc tieu: iOS jailbreak IPA cho 70mai A500S, co kha nang ket noi/play stream 70mai va hien thong tin latency.
+- VLC da tung ket noi duoc stream tu thiet bi khac; mot lan test loi duoc xac dinh lien quan quyen/app 70mai tren dien thoai test, khong duoc tu dong ket luan stream hong.
+- Yeu cau UI/playback: camera ngang, khong upside-down/crop thanh khung nho, full-screen.
+- YOLO tung hoat dong trong build truoc va can duoc giu khi tiep tuc sua.
+- Co fallback camera iPhone chi de test khi khong co 70mai; khong duoc tu dong thay mat 70mai.
+- Yeu cau lam theo build that, khong lap nhieu IPA thu tung thay doi nho; moi build phai kiem tra status/log truoc khi bao ket qua.
+- Day la handoff dau tien trong file nay; moi cap nhat sau append va tranh lap.
